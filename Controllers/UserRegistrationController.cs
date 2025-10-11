@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using xQuantum_API.Interfaces;
-using xQuantum_API.Models;
+using xQuantum_API.Models.Common;
 using xQuantum_API.Models.UserRegistration;
 
 namespace xQuantum_API.Controllers
