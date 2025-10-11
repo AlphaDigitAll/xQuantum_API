@@ -116,6 +116,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseCors("AllowAll");
 //app.UseMiddleware<ExceptionMiddleware>(); // Must be first
 
 app.UseHttpsRedirection();
