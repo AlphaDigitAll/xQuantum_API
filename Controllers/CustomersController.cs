@@ -6,7 +6,7 @@ using xQuantum_API.Interfaces;
 namespace xQuantum_API.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/[controller]/[action]")]
     [Authorize]
     public class CustomersController : ControllerBase
     {

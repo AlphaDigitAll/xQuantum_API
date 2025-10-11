@@ -1,12 +1,13 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using xQuantum_API.Interfaces;
+using xQuantum_API.Models;
 using xQuantum_API.Models.UserRegistration;
 
 namespace xQuantum_API.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/[controller]/[action]")]
     public class UserRegistrationController : ControllerBase
     {
         private readonly IUserRegistrationService _service;
@@ -17,26 +18,34 @@ namespace xQuantum_API.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterUserRequest req)
+        public async Task<IActionResult> RegisterUser([FromBody] RegisterUserRequest req)
         {
-            var userId = await _service.RegisterUserAsync(req);
-            return Ok(new { Message = "OTP sent successfully", UserId = userId });
+            if (!ModelState.IsValid)
+                return BadRequest(ApiResponse<string>.Fail("Invalid request data."));
+
+            var response = await _service.RegisterUserAsync(req);
+            return response.Success ? Ok(response) : BadRequest(response);
         }
 
+        // 🔹 2️⃣ Verify OTP
         [HttpPost("verify-otp")]
         public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest req)
         {
-            bool success = await _service.VerifyOtpAsync(req);
-            if (!success) return BadRequest("Invalid or expired OTP.");
-            return Ok(new { Message = "OTP verified successfully." });
+            if (req == null || req.UserId == Guid.Empty || string.IsNullOrWhiteSpace(req.OtpCode))
+                return BadRequest(ApiResponse<string>.Fail("UserId and OTP are required."));
+
+            var response = await _service.VerifyOtpAsync(req);
+            return response.Success ? Ok(response) : BadRequest(response);
         }
 
         [HttpPost("set-password")]
         public async Task<IActionResult> SetPassword([FromBody] SetPasswordRequest req)
         {
-            bool success = await _service.SetPasswordAsync(req);
-            if (!success) return BadRequest("Failed to set password.");
-            return Ok(new { Message = "Password set successfully." });
+            if (req == null || req.UserId == Guid.Empty || string.IsNullOrWhiteSpace(req.Password))
+                return BadRequest(ApiResponse<string>.Fail("UserId and Password are required."));
+
+            var response = await _service.SetPasswordAsync(req);
+            return response.Success ? Ok(response) : BadRequest(response);
         }
     }
 

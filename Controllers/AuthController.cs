@@ -10,7 +10,7 @@ namespace xQuantum_API.Controllers
 {
 
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/[controller]/[action]")]
     public class AuthController : ControllerBase
     {
         private readonly ITenantService _tenantService;

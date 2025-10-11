@@ -5,7 +5,7 @@ using xQuantum_API.Interfaces;
 
 namespace xQuantum_API.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/[controller]/[action]")]
     [ApiController]
     public class MasterDataController : ControllerBase
     {
