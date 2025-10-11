@@ -3,6 +3,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using xQuantum_API.Helpers;
+using xQuantum_API.Infrastructure;
 using xQuantum_API.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -123,10 +124,15 @@ app.UseCors("AllowAll");
 app.UseHttpsRedirection();
 
 // Middleware order is CRITICAL
+// 1. Authentication validates JWT token
+// 2. Tenant Resolution extracts and validates tenant context from JWT
+// 3. Authorization checks user permissions
 
-app.UseAuthentication();      // 1. First
+app.UseAuthentication();      // 1. First - Validates JWT token
 
-app.UseAuthorization();       // 2. Second
+app.UseTenantResolution();    // 2. Second - Extracts OrgId from JWT and validates tenant context
+
+app.UseAuthorization();       // 3. Third - Checks user permissions
 
 
 

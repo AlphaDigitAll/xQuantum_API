@@ -11,38 +11,21 @@ namespace xQuantum_API.Controllers.Reports
     [ApiController]
     [Authorize]
     [Route("api/[controller]/[action]")]
-    public class InventoryController : ControllerBase
+    public class InventoryController : TenantAwareControllerBase
     {
         private readonly IInventoryService _inventoryService;
-        private readonly IAuthenticationService _authService;
-        private readonly ILogger<CustomersController> _logger;
+        private readonly ILogger<InventoryController> _logger;
 
-        public InventoryController(IInventoryService inventoryService, IAuthenticationService authService, ILogger<CustomersController> logger)
+        public InventoryController(IInventoryService inventoryService, ILogger<InventoryController> logger)
         {
             _inventoryService = inventoryService ?? throw new ArgumentNullException(nameof(inventoryService));
-            _authService = authService ?? throw new ArgumentNullException(nameof(authService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
-        /// <summary>
-        /// Get tenant ID from current user context
-        /// </summary>
-        private string GetOrgId()
-        {
-            var orgId = HttpContext.Items["OrgId"]?.ToString()
-                ?? _authService.GetOrgIdFromToken(User);
-
-            if (string.IsNullOrWhiteSpace(orgId))
-            {
-                throw new UnauthorizedAccessException("Tenant ID not found in context");
-            }
-
-            return orgId;
         }
 
         [HttpPost("list")]
         public async Task<IActionResult> GetInventory([FromBody] InventoryQueryRequest req)
         {
-            var response = await _inventoryService.GetInventoryAsync(GetOrgId(), req);
+            var response = await _inventoryService.GetInventoryAsync(OrgId, req);
             return response.Success ? Ok(response) : BadRequest(response);
         }
     }

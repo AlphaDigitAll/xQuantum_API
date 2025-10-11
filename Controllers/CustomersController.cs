@@ -8,33 +8,15 @@ namespace xQuantum_API.Controllers
     [ApiController]
     [Route("api/[controller]/[action]")]
     [Authorize]
-    public class CustomersController : ControllerBase
+    public class CustomersController : TenantAwareControllerBase
     {
         private readonly ICustomerService _customerService;
-        private readonly IAuthenticationService _authService;
         private readonly ILogger<CustomersController> _logger;
 
-        public CustomersController(ICustomerService customerService, IAuthenticationService authService,ILogger<CustomersController> logger)
+        public CustomersController(ICustomerService customerService, ILogger<CustomersController> logger)
         {
-            _customerService = customerService ?? throw new ArgumentNullException(nameof(_customerService));
-            _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+            _customerService = customerService ?? throw new ArgumentNullException(nameof(customerService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
-
-        /// <summary>
-        /// Get tenant ID from current user context
-        /// </summary>
-        private string GetOrgId()
-        {
-            var orgId = HttpContext.Items["OrgId"]?.ToString()
-                ?? _authService.GetOrgIdFromToken(User);
-
-            if (string.IsNullOrWhiteSpace(orgId))
-            {
-                throw new UnauthorizedAccessException("Tenant ID not found in context");
-            }
-
-            return orgId;
         }
         /// <summary>
         /// Get customer by ID
@@ -44,10 +26,9 @@ namespace xQuantum_API.Controllers
         {
             try
             {
-                var orgId = GetOrgId();
-                _logger.LogInformation("Fetching customer {CustomerId} for tenant: {OrgId}", id, orgId);
+                _logger.LogInformation("Fetching customer {CustomerId} for tenant: {OrgId}", id, OrgId);
 
-                var customer = 1;//await _customerRepository.GetCustomerByIdAsync(orgId, id);
+                var customer = 1;//await _customerRepository.GetCustomerByIdAsync(OrgId, id);
 
                 if (customer == null)
                 {
