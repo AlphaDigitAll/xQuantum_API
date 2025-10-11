@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Identity.Data;
-using xQuantum_API.Models;
+using xQuantum_API.Models.Common;
 using xQuantum_API.Models.UserRegistration;
 
 namespace xQuantum_API.Interfaces

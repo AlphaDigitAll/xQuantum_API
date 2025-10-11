@@ -1,7 +1,9 @@
 ﻿using xQuantum_API.Infrastructure;
 using xQuantum_API.Interfaces;
+using xQuantum_API.Interfaces.Reports;
 using xQuantum_API.Repositories;
 using xQuantum_API.Services;
+using xQuantum_API.Services.Reports;
 
 namespace xQuantum_API.Helpers
 {
@@ -16,6 +18,7 @@ namespace xQuantum_API.Helpers
             services.AddScoped<ICustomerService, CustomerService>();
             services.AddScoped<IMasterDataService, MasterDataService>();
             services.AddScoped<IUserRegistrationService, UserRegistrationService>();
+            services.AddScoped<IInventoryService, InventoryService>();
             // Add these lines in your service registration
             services.AddHttpContextAccessor(); // ← Required!
 
