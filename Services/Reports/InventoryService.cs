@@ -16,11 +16,11 @@ namespace xQuantum_API.Services.Reports
             : base(connectionManager, tenantService, logger)
         {
         }
-        public async Task<ApiResponse<PaginatedResponse<Dictionary<string, object>>>> GetInventoryAsync(string orgId, InventoryQueryRequest req)
+        public async Task<ApiResponse<PaginatedResponseWithFooter<Dictionary<string, object>>>> GetInventoryAsync(string orgId, InventoryQueryRequest req)
         {
             return await ExecuteTenantOperation(orgId, async conn =>
             {
-                var paginatedResponse = new PaginatedResponse<Dictionary<string, object>>
+                var paginatedResponse = new PaginatedResponseWithFooter<Dictionary<string, object>>
                 {
                     Page = req.Page,
                     PageSize = req.PageSize
@@ -41,26 +41,97 @@ namespace xQuantum_API.Services.Reports
                 await using var reader = await cmd.ExecuteReaderAsync();
 
                 var items = new List<Dictionary<string, object>>();
+                Dictionary<string, object> footer = null;
                 long totalCount = 0;
 
                 while (await reader.ReadAsync())
                 {
-                    var dict = new Dictionary<string, object>();
-                    for (int i = 0; i < reader.FieldCount; i++)
-                        dict[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                    var resultType = reader.GetString(reader.GetOrdinal("result_type"));
 
-                    items.Add(dict);
+                    if (resultType == "record")
+                    {
+                        // This is a regular record
+                        var dict = new Dictionary<string, object>();
 
-                    if (totalCount == 0 && dict.ContainsKey("total_count") && dict["total_count"] != null)
-                        totalCount = Convert.ToInt64(dict["total_count"]);
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            var columnName = reader.GetName(i);
+
+                            // Skip result_type and NULL footer columns
+                            if (columnName == "result_type" ||
+                                (columnName == "working_quantity" && reader.IsDBNull(i)) ||
+                                (columnName == "total_fulfillable_quantity" && reader.IsDBNull(i)) ||
+                                (columnName == "shipped_quantity" && reader.IsDBNull(i)) ||
+                                (columnName == "receiving_quantity" && reader.IsDBNull(i)) ||
+                                (columnName == "customer_order_quantity" && reader.IsDBNull(i)) ||
+                                (columnName == "transshipment_quantity" && reader.IsDBNull(i)) ||
+                                (columnName == "fc_processing_quantity_total" && reader.IsDBNull(i)) ||
+                                (columnName == "total_reserved_quantity_sum" && reader.IsDBNull(i)) ||
+                                (columnName == "customer_damaged_quantity_total" && reader.IsDBNull(i)) ||
+                                (columnName == "warehouse_damaged_quantity_total" && reader.IsDBNull(i)) ||
+                                (columnName == "distributor_damaged_quantity_total" && reader.IsDBNull(i)) ||
+                                (columnName == "carrier_damaged_quantity_total" && reader.IsDBNull(i)) ||
+                                (columnName == "defective_quantity_total" && reader.IsDBNull(i)) ||
+                                (columnName == "expired_quantity_total" && reader.IsDBNull(i)) ||
+                                (columnName == "total_unfulfillable_quantity" && reader.IsDBNull(i)) ||
+                                (columnName == "total_quantity_sum" && reader.IsDBNull(i)))
+                            {
+                                continue;
+                            }
+
+                            dict[columnName] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                        }
+
+                        // Get total count
+                        if (dict.ContainsKey("total_count") && dict["total_count"] != null)
+                        {
+                            totalCount = Convert.ToInt64(dict["total_count"]);
+                        }
+
+                        items.Add(dict);
+                    }
+                    else if (resultType == "footer")
+                    {
+                        // This is the footer row
+                        footer = new Dictionary<string, object>
+                {
+                    { "sr_no", 0 },
+                    { "image", null },
+                    { "asin", null },
+                    { "fnSku", null },
+                    { "productName", null },
+                    { "working_quantity", GetLongValue(reader, "working_quantity") },
+                    { "total_fulfillable_quantity", GetLongValue(reader, "total_fulfillable_quantity") },
+                    { "total_unfulfillable_quantity", GetLongValue(reader, "total_unfulfillable_quantity") },
+                    { "shipped_quantity", GetLongValue(reader, "shipped_quantity") },
+                    { "receiving_quantity", GetLongValue(reader, "receiving_quantity") },
+                    { "customer_order_quantity", GetLongValue(reader, "customer_order_quantity") },
+                    { "transshipment_quantity", GetLongValue(reader, "transshipment_quantity") },
+                    { "fc_processing_quantity", GetLongValue(reader, "fc_processing_quantity_total") },
+                    { "total_reserved_quantity", GetLongValue(reader, "total_reserved_quantity_sum") },
+                    { "customer_damaged_quantity", GetLongValue(reader, "customer_damaged_quantity_total") },
+                    { "warehouse_damaged_quantity", GetLongValue(reader, "warehouse_damaged_quantity_total") },
+                    { "distributor_damaged_quantity", GetLongValue(reader, "distributor_damaged_quantity_total") },
+                    { "carrier_damaged_quantity", GetLongValue(reader, "carrier_damaged_quantity_total") },
+                    { "defective_quantity", GetLongValue(reader, "defective_quantity_total") },
+                    { "expired_quantity", GetLongValue(reader, "expired_quantity_total") },
+                    { "total_quantity", GetLongValue(reader, "total_quantity_sum") }
+                };
+                    }
                 }
 
                 paginatedResponse.Records = items;
                 paginatedResponse.TotalRecords = totalCount;
+                paginatedResponse.Footer = footer ?? new Dictionary<string, object>();
 
                 return paginatedResponse;
             }, "Get Inventory");
         }
 
+        private long GetLongValue(NpgsqlDataReader reader, string columnName)
+        {
+            var ordinal = reader.GetOrdinal(columnName);
+            return reader.IsDBNull(ordinal) ? 0 : reader.GetInt64(ordinal);
+        }
     }
 }

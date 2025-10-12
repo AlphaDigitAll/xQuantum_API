@@ -19,4 +19,12 @@
         public long TotalRecords { get; set; }
         public List<T> Records { get; set; } = new();
     }
+    public class PaginatedResponseWithFooter<T>
+    {
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public long TotalRecords { get; set; }
+        public List<T> Records { get; set; }
+        public Dictionary<string, object> Footer { get; set; }
+    }
 }
