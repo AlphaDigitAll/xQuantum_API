@@ -2,11 +2,12 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using xQuantum_API.Infrastructure;
-using xQuantum_API.Interfaces;
-using xQuantum_API.Models;
-using xQuantum_API.Models.Login;
+using xQuantum_API.Interfaces.Authentication;
+using xQuantum_API.Interfaces.Tenant;
+using xQuantum_API.Models.Authentication.Login;
+using xQuantum_API.Models.Tenant;
 
-namespace xQuantum_API.Controllers
+namespace xQuantum_API.Controllers.Authentication
 {
 
     [ApiController]

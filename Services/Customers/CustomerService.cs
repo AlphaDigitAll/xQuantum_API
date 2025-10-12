@@ -1,10 +1,10 @@
 ﻿using Microsoft.Extensions.Configuration;
 using xQuantum_API.Infrastructure;
-using xQuantum_API.Interfaces;
-using xQuantum_API.Models;
-using xQuantum_API.Services;
+using xQuantum_API.Interfaces.Customers;
+using xQuantum_API.Interfaces.Tenant;
+using xQuantum_API.Models.Customers;
 
-namespace xQuantum_API.Repositories
+namespace xQuantum_API.Services.Customers
 {
     public class CustomerService : ICustomerService
     {

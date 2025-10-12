@@ -1,11 +1,20 @@
 ﻿using xQuantum_API.Infrastructure;
-using xQuantum_API.Interfaces;
+using xQuantum_API.Interfaces.Authentication;
+using xQuantum_API.Interfaces.Customers;
+using xQuantum_API.Interfaces.MasterData;
 using xQuantum_API.Interfaces.Products;
 using xQuantum_API.Interfaces.Reports;
-using xQuantum_API.Repositories;
-using xQuantum_API.Services;
+using xQuantum_API.Interfaces.Subscription;
+using xQuantum_API.Interfaces.Tenant;
+using xQuantum_API.Interfaces.UserRegistration;
+using xQuantum_API.Services.Authentication;
+using xQuantum_API.Services.Customers;
+using xQuantum_API.Services.MasterData;
 using xQuantum_API.Services.Products;
 using xQuantum_API.Services.Reports;
+using xQuantum_API.Services.Subscription;
+using xQuantum_API.Services.Tenant;
+using xQuantum_API.Services.UserRegistration;
 
 namespace xQuantum_API.Helpers
 {
@@ -22,6 +31,7 @@ namespace xQuantum_API.Helpers
             services.AddScoped<IUserRegistrationService, UserRegistrationService>();
             services.AddScoped<IInventoryService, InventoryService>();
             services.AddScoped<ISubProductColumnService, SubProductColumnService>();
+            services.AddScoped<ISellerSubscriptionService, SellerSubscriptionService>();
             // Add these lines in your service registration
             services.AddHttpContextAccessor(); // ← Required!
 

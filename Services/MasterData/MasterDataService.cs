@@ -1,8 +1,8 @@
 ﻿using Npgsql;
-using xQuantum_API.Interfaces;
+using xQuantum_API.Interfaces.MasterData;
 using xQuantum_API.Models.Common;
 
-namespace xQuantum_API.Services
+namespace xQuantum_API.Services.MasterData
 {
     public class MasterDataService : IMasterDataService
     {

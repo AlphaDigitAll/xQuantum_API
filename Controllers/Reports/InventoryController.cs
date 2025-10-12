@@ -1,10 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using xQuantum_API.Interfaces;
 using xQuantum_API.Interfaces.Reports;
 using xQuantum_API.Models.Reports;
-using xQuantum_API.Repositories;
 
 namespace xQuantum_API.Controllers.Reports
 {

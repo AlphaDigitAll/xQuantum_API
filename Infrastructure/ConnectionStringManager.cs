@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Concurrent;
-using xQuantum_API.Interfaces;
+using xQuantum_API.Interfaces.Tenant;
 
 namespace xQuantum_API.Infrastructure
 {

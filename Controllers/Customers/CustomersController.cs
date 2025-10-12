@@ -1,9 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using xQuantum_API.Interfaces;
+using xQuantum_API.Interfaces.Customers;
 
-namespace xQuantum_API.Controllers
+namespace xQuantum_API.Controllers.Customers
 {
     [ApiController]
     [Route("api/[controller]/[action]")]

@@ -1,4 +1,4 @@
-﻿namespace xQuantum_API.Models
+﻿namespace xQuantum_API.Models.Tenant
 {
     public class TenantInfo
     {

@@ -1,8 +1,8 @@
 ﻿using Npgsql;
-using xQuantum_API.Interfaces;
-using xQuantum_API.Models;
+using xQuantum_API.Interfaces.Tenant;
+using xQuantum_API.Models.Tenant;
 
-namespace xQuantum_API.Services
+namespace xQuantum_API.Services.Tenant
 {
     public class TenantService: ITenantService
     {

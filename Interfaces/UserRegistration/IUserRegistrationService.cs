@@ -2,7 +2,7 @@
 using xQuantum_API.Models.Common;
 using xQuantum_API.Models.UserRegistration;
 
-namespace xQuantum_API.Interfaces
+namespace xQuantum_API.Interfaces.UserRegistration
 {
     public interface IUserRegistrationService
     {

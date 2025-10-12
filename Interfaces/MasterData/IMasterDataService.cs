@@ -1,6 +1,6 @@
 ﻿using xQuantum_API.Models.Common;
 
-namespace xQuantum_API.Interfaces
+namespace xQuantum_API.Interfaces.MasterData
 {
     public interface IMasterDataService
     {

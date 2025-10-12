@@ -1,6 +1,6 @@
 ﻿using Npgsql;
-using xQuantum_API.Interfaces;
 using xQuantum_API.Interfaces.Products;
+using xQuantum_API.Interfaces.Tenant;
 using xQuantum_API.Models.Common;
 using xQuantum_API.Models.Products;
 

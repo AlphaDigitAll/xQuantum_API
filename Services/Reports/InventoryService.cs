@@ -1,10 +1,9 @@
 ﻿using Newtonsoft.Json;
 using Npgsql;
-using xQuantum_API.Interfaces;
 using xQuantum_API.Interfaces.Reports;
+using xQuantum_API.Interfaces.Tenant;
 using xQuantum_API.Models.Common;
 using xQuantum_API.Models.Reports;
-using xQuantum_API.Repositories;
 
 namespace xQuantum_API.Services.Reports
 {

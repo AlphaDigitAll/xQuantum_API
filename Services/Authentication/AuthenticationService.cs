@@ -2,10 +2,10 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using xQuantum_API.Interfaces;
-using xQuantum_API.Models;
+using xQuantum_API.Interfaces.Authentication;
+using xQuantum_API.Models.Tenant;
 
-namespace xQuantum_API.Services
+namespace xQuantum_API.Services.Authentication
 {
     public class AuthenticationService : IAuthenticationService
     {

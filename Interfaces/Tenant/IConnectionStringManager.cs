@@ -1,4 +1,4 @@
-﻿namespace xQuantum_API.Interfaces
+﻿namespace xQuantum_API.Interfaces.Tenant
 {
     public interface IConnectionStringManager
     {

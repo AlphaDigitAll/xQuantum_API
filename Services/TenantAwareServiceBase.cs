@@ -1,5 +1,5 @@
 using Npgsql;
-using xQuantum_API.Interfaces;
+using xQuantum_API.Interfaces.Tenant;
 using xQuantum_API.Models.Common;
 
 namespace xQuantum_API.Services

@@ -1,6 +1,6 @@
-﻿using xQuantum_API.Models;
+﻿using xQuantum_API.Models.Tenant;
 
-namespace xQuantum_API.Interfaces
+namespace xQuantum_API.Interfaces.Tenant
 {
     public interface ITenantService
     {

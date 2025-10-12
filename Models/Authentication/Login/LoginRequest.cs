@@ -1,4 +1,4 @@
-﻿namespace xQuantum_API.Models.Login
+﻿namespace xQuantum_API.Models.Authentication.Login
 {
     public class LoginRequest
     {
