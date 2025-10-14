@@ -1,4 +1,6 @@
-﻿namespace xQuantum_API.Models.Products
+﻿using Newtonsoft.Json.Linq;
+
+namespace xQuantum_API.Models.Products
 {
     public class SubProductColumn
     {
@@ -12,5 +14,13 @@
         public Guid? UpdatedBy { get; set; }
         public DateTime? UpdatedOn { get; set; }
     }
+    public class ProductDetail
+    {
+        public string product_asin { get; set; } = string.Empty;
+        public string product_name { get; set; } = string.Empty;
+        public string product_image { get; set; } = string.Empty;
+        public Dictionary<string, object> dynamic_fields { get; set; } = new();
+    }
+
 
 }

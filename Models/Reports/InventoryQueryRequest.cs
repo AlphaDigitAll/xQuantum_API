@@ -9,5 +9,28 @@
         public string? GlobalSearch { get; set; } = null;
         public Dictionary<string, object> Filters { get; set; } = new();
     }
+    public class InventoryCardSummaryRequest
+    {
+        public Guid SubId { get; set; }
+    }
+    public class InventoryCardSummary
+    {
+        public Guid sub_id { get; set; }
+        public int fulfillable_quantity { get; set; }
+        public int working_quantity { get; set; }
+        public int shipped_quantity { get; set; }
+        public int receiving_quantity { get; set; }
+        public int unfulfillable_quantity { get; set; }
+        public int total_reserved_quantity { get; set; }
+        public int customer_order_quantity { get; set; }
+        public int trans_shipment_quantity { get; set; }
+        public int fc_processing_quantity { get; set; }
+        public int customer_damaged_quantity { get; set; }
+        public int warehouse_damaged_quantity { get; set; }
+        public int distributor_damaged_quantity { get; set; }
+        public int carrier_damaged_quantity { get; set; }
+        public int defective_quantity { get; set; }
+        public int expired_quantity { get; set; }
+    }
 
 }

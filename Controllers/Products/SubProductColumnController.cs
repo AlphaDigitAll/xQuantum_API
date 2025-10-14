@@ -99,5 +99,14 @@ namespace xQuantum_API.Controllers.Products
             var response = await _service.GetByProfileIdAsync(OrgId, profileId);
             return response.Success ? Ok(response) : BadRequest(response);
         }
+        /// <summary>
+        /// Get all products columns and value for a specific sub-id
+        /// </summary>
+        [HttpGet("Getproducts/{subId}")]
+        public async Task<IActionResult> GetProductsBySubId(Guid subId)
+        {
+            var response = await _service.GetProductsBySubIdAsync(OrgId, subId);
+            return response.Success ? Ok(response) : BadRequest(response);
+        }
     }
 }

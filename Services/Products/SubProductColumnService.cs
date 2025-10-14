@@ -1,4 +1,6 @@
-﻿using Npgsql;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Npgsql;
 using xQuantum_API.Interfaces.Products;
 using xQuantum_API.Interfaces.Tenant;
 using xQuantum_API.Models.Common;
@@ -142,6 +144,59 @@ namespace xQuantum_API.Services.Products
 
                 return result;
             }, "Get SubProductColumns By ProfileId");
+        }
+
+        public async Task<ApiResponse<List<ProductDetail>>> GetProductsBySubIdAsync(string orgId, Guid subId)
+        {
+            try
+            {
+                return await ExecuteTenantOperation(orgId, async conn =>
+                {
+                    const string sql = "SELECT * FROM public.fn_amz_get_products_by_sub_id(@subId)";
+
+                    await using var cmd = new NpgsqlCommand(sql, conn);
+                    cmd.Parameters.AddWithValue("@subId", subId);
+
+                    await using var sdr = await cmd.ExecuteReaderAsync();
+
+                    var products = new List<ProductDetail>();
+
+                    while (await sdr.ReadAsync())
+                    {
+                        products.Add(new ProductDetail
+                        {
+                            product_asin = sdr.IsDBNull(sdr.GetOrdinal("product_asin")) ? string.Empty : sdr.GetString(sdr.GetOrdinal("product_asin")),
+                            product_name = sdr.IsDBNull(sdr.GetOrdinal("product_name")) ? string.Empty : sdr.GetString(sdr.GetOrdinal("product_name")),
+                            product_image = sdr.IsDBNull(sdr.GetOrdinal("product_image")) ? string.Empty : sdr.GetString(sdr.GetOrdinal("product_image")),
+                            dynamic_fields = !sdr.IsDBNull(sdr.GetOrdinal("dynamic_data")) && !string.IsNullOrWhiteSpace(sdr["dynamic_data"]?.ToString())
+                                 ? JsonConvert.DeserializeObject<Dictionary<string, object>>(sdr["dynamic_data"].ToString()!)?.ToDictionary(k => k.Key, v => v.Value ?? string.Empty) ?? new Dictionary<string, object>()
+                                 : new Dictionary<string, object>()
+                        });
+                    }
+
+
+                    return products;
+
+                }, "Get Products By SubId");
+            }
+            catch (NpgsqlException npgEx)
+            {
+                return new ApiResponse<List<ProductDetail>>
+                {
+                    Success = false,
+                    Message = $"Database error while fetching product data: {npgEx.Message}",
+                    Data = null
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<List<ProductDetail>>
+                {
+                    Success = false,
+                    Message = $"Unexpected error: {ex.Message}",
+                    Data = null
+                };
+            }
         }
     }
 }
