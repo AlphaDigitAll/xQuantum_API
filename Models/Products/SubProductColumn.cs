@@ -22,5 +22,17 @@ namespace xQuantum_API.Models.Products
         public Dictionary<string, object> dynamic_fields { get; set; } = new();
     }
 
+    public class SubProductColumnValue
+    {
+        public int Id { get; set; }
+        public Guid SubId { get; set; }
+        public string ProductAsin { get; set; } = string.Empty;
+        public int ColumnId { get; set; }
+        public string? Value { get; set; }
+        public Guid CreatedBy { get; set; }
+        public DateTime CreatedOn { get; set; }
+        public Guid? UpdatedBy { get; set; }
+        public DateTime? UpdatedOn { get; set; }
+    }
 
 }

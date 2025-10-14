@@ -108,5 +108,30 @@ namespace xQuantum_API.Controllers.Products
             var response = await _service.GetProductsBySubIdAsync(OrgId, subId);
             return response.Success ? Ok(response) : BadRequest(response);
         }
+
+        /// <summary>
+        /// Upsert (insert or update) a sub-product column value
+        /// If a record with the same column_id, product_asin, and sub_id exists, it updates; otherwise inserts
+        /// </summary>
+        [HttpPost("upsert-column-value")]
+        public async Task<IActionResult> UpsertColumnValue([FromBody] UpsertSubProductColumnValueRequest request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            // Map request to entity with system-managed fields
+            var model = new SubProductColumnValue
+            {
+                SubId = request.SubId,
+                ProductAsin = request.ProductAsin,
+                ColumnId = request.ColumnId,
+                Value = request.Value,
+                CreatedBy = UserIdGuid,  // From JWT token
+                UpdatedBy = UserIdGuid   // From JWT token
+            };
+
+            var response = await _service.UpsertColumnValueAsync(OrgId, model);
+            return response.Success ? Ok(response) : BadRequest(response);
+        }
     }
 }

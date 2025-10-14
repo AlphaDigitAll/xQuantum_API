@@ -39,4 +39,24 @@ namespace xQuantum_API.Models.Products
         [Required(ErrorMessage = "ProfileId is required")]
         public Guid ProfileId { get; set; }
     }
+
+    /// <summary>
+    /// Request model for upserting (insert or update) a SubProductColumnValue.
+    /// If a record with the same column_id, product_asin, and sub_id exists, it updates; otherwise inserts.
+    /// </summary>
+    public class UpsertSubProductColumnValueRequest
+    {
+        [Required(ErrorMessage = "SubId is required")]
+        public Guid SubId { get; set; }
+
+        [Required(ErrorMessage = "ProductAsin is required")]
+        [StringLength(50, MinimumLength = 1, ErrorMessage = "ProductAsin must be between 1 and 50 characters")]
+        public string ProductAsin { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "ColumnId is required")]
+        [Range(1, int.MaxValue, ErrorMessage = "ColumnId must be greater than 0")]
+        public int ColumnId { get; set; }
+
+        public string? Value { get; set; }
+    }
 }

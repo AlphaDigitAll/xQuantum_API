@@ -11,6 +11,6 @@ namespace xQuantum_API.Interfaces.Products
         Task<ApiResponse<List<SubProductColumn>>> GetByProfileIdAsync(string orgId, Guid profileId);
         Task<ApiResponse<List<ProductDetail>>> GetProductsBySubIdAsync(string orgId, Guid subId);
         Task<ApiResponse<bool>> DeleteAsync(string orgId, int id, Guid updatedBy);
-
+        Task<ApiResponse<int>> UpsertColumnValueAsync(string orgId, SubProductColumnValue model);
     }
 }

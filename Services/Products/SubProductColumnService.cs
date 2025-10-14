@@ -198,5 +198,66 @@ namespace xQuantum_API.Services.Products
                 };
             }
         }
+
+        public async Task<ApiResponse<int>> UpsertColumnValueAsync(string orgId, SubProductColumnValue model)
+        {
+            return await ExecuteTenantOperation(orgId, async conn =>
+            {
+                // First, check if a record exists with the same column_id, product_asin, and sub_id
+                var checkSql = @"
+                    SELECT id FROM tbl_amz_sub_product_column_values
+                    WHERE column_id = @column_id
+                      AND product_asin = @product_asin
+                      AND sub_id = @sub_id
+                    LIMIT 1;";
+
+                await using var checkCmd = new NpgsqlCommand(checkSql, conn);
+                checkCmd.Parameters.AddWithValue("@column_id", model.ColumnId);
+                checkCmd.Parameters.AddWithValue("@product_asin", model.ProductAsin);
+                checkCmd.Parameters.AddWithValue("@sub_id", model.SubId);
+
+                var existingId = await checkCmd.ExecuteScalarAsync();
+
+                if (existingId != null)
+                {
+                    // Record exists - UPDATE
+                    var updateSql = @"
+                        UPDATE tbl_amz_sub_product_column_values
+                        SET value = @value,
+                            updated_by = @updated_by,
+                            updated_on = NOW()
+                        WHERE id = @id
+                        RETURNING id;";
+
+                    await using var updateCmd = new NpgsqlCommand(updateSql, conn);
+                    updateCmd.Parameters.AddWithValue("@id", existingId);
+                    updateCmd.Parameters.AddWithValue("@value", model.Value ?? (object)DBNull.Value);
+                    updateCmd.Parameters.AddWithValue("@updated_by", model.UpdatedBy ?? model.CreatedBy);
+
+                    var result = await updateCmd.ExecuteScalarAsync();
+                    return result != null ? Convert.ToInt32(result) : 0;
+                }
+                else
+                {
+                    // Record doesn't exist - INSERT
+                    var insertSql = @"
+                        INSERT INTO tbl_amz_sub_product_column_values
+                            (sub_id, product_asin, column_id, value, created_by, created_on)
+                        VALUES
+                            (@sub_id, @product_asin, @column_id, @value, @created_by, NOW())
+                        RETURNING id;";
+
+                    await using var insertCmd = new NpgsqlCommand(insertSql, conn);
+                    insertCmd.Parameters.AddWithValue("@sub_id", model.SubId);
+                    insertCmd.Parameters.AddWithValue("@product_asin", model.ProductAsin);
+                    insertCmd.Parameters.AddWithValue("@column_id", model.ColumnId);
+                    insertCmd.Parameters.AddWithValue("@value", model.Value ?? (object)DBNull.Value);
+                    insertCmd.Parameters.AddWithValue("@created_by", model.CreatedBy);
+
+                    var result = await insertCmd.ExecuteScalarAsync();
+                    return result != null ? Convert.ToInt32(result) : 0;
+                }
+            }, "Upsert SubProductColumnValue");
+        }
     }
 }
