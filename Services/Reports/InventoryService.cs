@@ -19,7 +19,9 @@ namespace xQuantum_API.Services.Reports
 
         public async Task<ApiResponse<InventoryCardSummary>> GetInventoryCardAsync(string orgId, Guid subId)
         {
-            return await ExecuteTenantOperation(orgId, async conn =>
+            try
+            {
+                return await ExecuteTenantOperation(orgId, async conn =>
             {
                 const string sql = "SELECT * FROM public.fn_amz_inventory_card_summary(@subId)";
 
@@ -28,34 +30,61 @@ namespace xQuantum_API.Services.Reports
 
                 await using var sdr = await cmd.ExecuteReaderAsync();
 
-                InventoryCardSummary summary = null;
+                InventoryCardSummary summary = null!;
 
                 if (await sdr.ReadAsync())
                 {
-                    summary = new InventoryCardSummary
+                    var summaryObj = new InventoryCardSummary
                     {
-                        sub_id = sdr.IsDBNull(sdr.GetOrdinal("sub_id")) ? Guid.Empty : sdr.GetGuid(sdr.GetOrdinal("sub_id")),
-                        fulfillable_quantity = sdr.IsDBNull(sdr.GetOrdinal("fulfillable_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("fulfillable_quantity")),
-                        working_quantity = sdr.IsDBNull(sdr.GetOrdinal("working_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("working_quantity")),
-                        shipped_quantity = sdr.IsDBNull(sdr.GetOrdinal("shipped_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("shipped_quantity")),
-                        receiving_quantity = sdr.IsDBNull(sdr.GetOrdinal("receiving_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("receiving_quantity")),
-                        unfulfillable_quantity = sdr.IsDBNull(sdr.GetOrdinal("unfulfillable_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("unfulfillable_quantity")),
-                        total_reserved_quantity = sdr.IsDBNull(sdr.GetOrdinal("total_reserved_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("total_reserved_quantity")),
-                        customer_order_quantity = sdr.IsDBNull(sdr.GetOrdinal("customer_order_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("customer_order_quantity")),
-                        trans_shipment_quantity = sdr.IsDBNull(sdr.GetOrdinal("trans_shipment_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("trans_shipment_quantity")),
-                        fc_processing_quantity = sdr.IsDBNull(sdr.GetOrdinal("fc_processing_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("fc_processing_quantity")),
-                        customer_damaged_quantity = sdr.IsDBNull(sdr.GetOrdinal("customer_damaged_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("customer_damaged_quantity")),
-                        warehouse_damaged_quantity = sdr.IsDBNull(sdr.GetOrdinal("warehouse_damaged_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("warehouse_damaged_quantity")),
-                        distributor_damaged_quantity = sdr.IsDBNull(sdr.GetOrdinal("distributor_damaged_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("distributor_damaged_quantity")),
-                        carrier_damaged_quantity = sdr.IsDBNull(sdr.GetOrdinal("carrier_damaged_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("carrier_damaged_quantity")),
-                        defective_quantity = sdr.IsDBNull(sdr.GetOrdinal("defective_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("defective_quantity")),
-                        expired_quantity = sdr.IsDBNull(sdr.GetOrdinal("expired_quantity")) ? 0 : sdr.GetInt32(sdr.GetOrdinal("expired_quantity"))
+                        sub_id = sdr.GetGuid(sdr.GetOrdinal("sub_id")),
+                        Fulfillable_Quantity = new FulfillableGroup
+                        {
+                            fulfillable_quantity = sdr.GetInt32(sdr.GetOrdinal("fulfillable_quantity")),
+                            working_quantity = sdr.GetInt32(sdr.GetOrdinal("working_quantity")),
+                            shipped_quantity = sdr.GetInt32(sdr.GetOrdinal("shipped_quantity")),
+                            receiving_quantity = sdr.GetInt32(sdr.GetOrdinal("receiving_quantity"))
+                        },
+                        Reserved_Quantity = new ReservedGroup
+                        {
+                            total_reserved_quantity = sdr.GetInt32(sdr.GetOrdinal("total_reserved_quantity")),
+                            customer_order_quantity = sdr.GetInt32(sdr.GetOrdinal("customer_order_quantity")),
+                            trans_shipment_quantity = sdr.GetInt32(sdr.GetOrdinal("trans_shipment_quantity")),
+                            fc_processing_quantity = sdr.GetInt32(sdr.GetOrdinal("fc_processing_quantity"))
+                        },
+                        Unfulfillable_Quantity = new UnfulfillableGroup
+                        {
+                            unfulfillable_quantity = sdr.GetInt32(sdr.GetOrdinal("unfulfillable_quantity")),
+                            customer_damaged_quantity = sdr.GetInt32(sdr.GetOrdinal("customer_damaged_quantity")),
+                            warehouse_damaged_quantity = sdr.GetInt32(sdr.GetOrdinal("warehouse_damaged_quantity")),
+                            distributor_damaged_quantity = sdr.GetInt32(sdr.GetOrdinal("distributor_damaged_quantity")),
+                            carrier_damaged_quantity = sdr.GetInt32(sdr.GetOrdinal("carrier_damaged_quantity")),
+                            defective_quantity = sdr.GetInt32(sdr.GetOrdinal("defective_quantity")),
+                            expired_quantity = sdr.GetInt32(sdr.GetOrdinal("expired_quantity"))
+                        }
                     };
                 }
-
                 return summary ?? new InventoryCardSummary { sub_id = subId };
             },
             "Get Inventory Card Summary");
+            }
+            catch (NpgsqlException npgEx)
+            {
+                return new ApiResponse<InventoryCardSummary>
+                {
+                    Success = false,
+                    Message = $"Database error while fetching inventory summary: {npgEx.Message}",
+                    Data = null
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<InventoryCardSummary>
+                {
+                    Success = false,
+                    Message = $"Unexpected error occurred: {ex.Message}",
+                    Data = null
+                };
+            }
         }
         public async Task<ApiResponse<PaginatedResponseWithFooter<Dictionary<string, object>>>> GetInventoryAsync(string orgId, InventoryQueryRequest req)
         {
