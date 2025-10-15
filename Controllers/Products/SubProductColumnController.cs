@@ -5,6 +5,7 @@ using xQuantum_API.Interfaces;
 using xQuantum_API.Interfaces.Products;
 using xQuantum_API.Interfaces.Reports;
 using xQuantum_API.Models.Products;
+using xQuantum_API.Models.Reports;
 
 namespace xQuantum_API.Controllers.Products
 {
@@ -102,10 +103,10 @@ namespace xQuantum_API.Controllers.Products
         /// <summary>
         /// Get all products columns and value for a specific sub-id
         /// </summary>
-        [HttpGet("Getproducts/{subId}")]
-        public async Task<IActionResult> GetProductsBySubId(Guid subId)
+        [HttpPost("Getproducts")]
+        public async Task<IActionResult> GetProductsBySubId([FromBody] InventoryQueryRequest req)
         {
-            var response = await _service.GetProductsBySubIdAsync(OrgId, subId);
+            var response = await _service.GetProductsBySubIdAsync(OrgId, req);
             return response.Success ? Ok(response) : BadRequest(response);
         }
 
