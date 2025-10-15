@@ -5,6 +5,7 @@ using xQuantum_API.Interfaces.Products;
 using xQuantum_API.Interfaces.Tenant;
 using xQuantum_API.Models.Common;
 using xQuantum_API.Models.Products;
+using xQuantum_API.Models.Reports;
 
 
 namespace xQuantum_API.Services.Products
@@ -146,55 +147,83 @@ namespace xQuantum_API.Services.Products
             }, "Get SubProductColumns By ProfileId");
         }
 
-        public async Task<ApiResponse<List<ProductDetail>>> GetProductsBySubIdAsync(string orgId, Guid subId)
+        public async Task<ApiResponse<PaginatedResponseWithFooter<Dictionary<string, object>>>> GetProductsBySubIdAsync(string orgId, InventoryQueryRequest req)
         {
             try
             {
                 return await ExecuteTenantOperation(orgId, async conn =>
                 {
-                    const string sql = "SELECT * FROM public.fn_amz_get_products_by_sub_id(@subId)";
+                    const string sql = "SELECT * FROM public.fn_amz_get_products_by_sub_id(@subId, @page, @pageSize, @sortField, @sortOrder, @globalSearch, @filters::jsonb)";
 
                     await using var cmd = new NpgsqlCommand(sql, conn);
-                    cmd.Parameters.AddWithValue("@subId", subId);
+                    cmd.Parameters.AddWithValue("@subId", req.SubId);
+                    cmd.Parameters.AddWithValue("@page", req.Page);
+                    cmd.Parameters.AddWithValue("@pageSize", req.PageSize);
+                    cmd.Parameters.AddWithValue("@sortField", string.IsNullOrWhiteSpace(req.SortField) ? "asin" : req.SortField);
+                    cmd.Parameters.AddWithValue("@sortOrder", req.SortOrder == 0 ? 1 : req.SortOrder);
+                    cmd.Parameters.AddWithValue("@globalSearch", (object?)req.GlobalSearch ?? DBNull.Value);
+
+                    var filtersJson = JsonConvert.SerializeObject(req.Filters ?? new Dictionary<string, object>());
+                    cmd.Parameters.AddWithValue("@filters", filtersJson);
 
                     await using var sdr = await cmd.ExecuteReaderAsync();
 
-                    var products = new List<ProductDetail>();
+                    var paginatedResponse = new PaginatedResponseWithFooter<Dictionary<string, object>>
+                    {
+                        Page = req.Page,
+                        PageSize = req.PageSize,
+                        Records = new List<Dictionary<string, object>>(),
+                        Footer = new Dictionary<string, object>()
+                    };
+
+                    long totalCount = 0;
 
                     while (await sdr.ReadAsync())
                     {
-                        products.Add(new ProductDetail
+                        var record = new Dictionary<string, object>
                         {
-                            product_asin = sdr.IsDBNull(sdr.GetOrdinal("product_asin")) ? string.Empty : sdr.GetString(sdr.GetOrdinal("product_asin")),
-                            product_name = sdr.IsDBNull(sdr.GetOrdinal("product_name")) ? string.Empty : sdr.GetString(sdr.GetOrdinal("product_name")),
-                            product_image = sdr.IsDBNull(sdr.GetOrdinal("product_image")) ? string.Empty : sdr.GetString(sdr.GetOrdinal("product_image")),
-                            dynamic_fields = !sdr.IsDBNull(sdr.GetOrdinal("dynamic_data")) && !string.IsNullOrWhiteSpace(sdr["dynamic_data"]?.ToString())
-                                 ? JsonConvert.DeserializeObject<Dictionary<string, object>>(sdr["dynamic_data"].ToString()!)?.ToDictionary(k => k.Key, v => v.Value ?? string.Empty) ?? new Dictionary<string, object>()
-                                 : new Dictionary<string, object>()
-                        });
+                            ["product_asin"] = sdr.IsDBNull(sdr.GetOrdinal("product_asin")) ? string.Empty : sdr.GetString(sdr.GetOrdinal("product_asin")),
+                            ["product_name"] = sdr.IsDBNull(sdr.GetOrdinal("product_name")) ? string.Empty : sdr.GetString(sdr.GetOrdinal("product_name")),
+                            ["product_image"] = sdr.IsDBNull(sdr.GetOrdinal("product_image")) ? string.Empty : sdr.GetString(sdr.GetOrdinal("product_image"))
+                        };
+
+                        if (!sdr.IsDBNull(sdr.GetOrdinal("dynamic_data")))
+                        {
+                            var jsonData = sdr["dynamic_data"]?.ToString();
+                            if (!string.IsNullOrWhiteSpace(jsonData))
+                            {
+                                var dynamicFields = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonData);
+                                if (dynamicFields != null)
+                                {
+                                    foreach (var field in dynamicFields)
+                                        record[field.Key] = field.Value ?? string.Empty;
+                                }
+                            }
+                        }
+
+                        paginatedResponse.Records.Add(record);
+                        totalCount++;
                     }
 
+                    paginatedResponse.TotalRecords = totalCount;
+                    return paginatedResponse;
 
-                    return products;
-
-                }, "Get Products By SubId");
+                }, nameof(GetProductsBySubIdAsync));
             }
-            catch (NpgsqlException npgEx)
+            catch (NpgsqlException ex)
             {
-                return new ApiResponse<List<ProductDetail>>
+                return new ApiResponse<PaginatedResponseWithFooter<Dictionary<string, object>>>
                 {
                     Success = false,
-                    Message = $"Database error while fetching product data: {npgEx.Message}",
-                    Data = null
+                    Message = $"Database error while fetching product data: {ex.Message}"
                 };
             }
             catch (Exception ex)
             {
-                return new ApiResponse<List<ProductDetail>>
+                return new ApiResponse<PaginatedResponseWithFooter<Dictionary<string, object>>>
                 {
                     Success = false,
-                    Message = $"Unexpected error: {ex.Message}",
-                    Data = null
+                    Message = $"Unexpected error: {ex.Message}"
                 };
             }
         }
