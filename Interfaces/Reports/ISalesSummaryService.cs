@@ -15,6 +15,6 @@ namespace xQuantum_API.Interfaces.Reports
         /// <param name="orgId">Organization ID for tenant isolation</param>
         /// <param name="request">Filter and pagination parameters</param>
         /// <returns>Raw JSON string with sales summary data</returns>
-        Task<string> GetSalesSummaryJsonAsync(string orgId, SummaryFilterRequest request);
+        public Task<string> GetSellerSalesSummaryJsonAsync(string orgId, SummaryFilterRequest request);
     }
 }

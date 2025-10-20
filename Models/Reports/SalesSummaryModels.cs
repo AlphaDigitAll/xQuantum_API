@@ -6,13 +6,16 @@ namespace xQuantum_API.Models.Reports
     public class SummaryFilterRequest
     {
         public Guid SubId { get; set; }
-        public string LoadLevel { get; set; } = string.Empty;
-        public string TabType { get; set; } = string.Empty;
-        public Dictionary<string, string> Filters { get; set; } = new();
+        public string TabType { get; set; } = "order";
+        public string LoadLevel { get; set; } = "day";
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
-        public int Offset { get; set; } = 0;
-        public int Limit { get; set; } = 100;
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 100;
+        public string? SortField { get; set; }
+        public string? SortOrder { get; set; }
+        public string? GlobalSearch { get; set; }
+        public Dictionary<string, string>? Filters { get; set; } = new();
     }
 
     /// <summary>

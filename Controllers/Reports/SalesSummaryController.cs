@@ -61,82 +61,28 @@ namespace xQuantum_API.Controllers.Reports
         ///   }
         /// }
         /// </remarks>
-        [HttpPost]
+        [HttpPost("summary")]
         [Produces("application/json")]
-        public async Task<IActionResult> GetSummary([FromBody] SummaryFilterRequest request)
+        public async Task<IActionResult> GetSummary([FromBody] SummaryFilterRequest req)
         {
-            // Quick validation - fail fast
-            if (request == null)
-            {
-                _logger.LogWarning("GetSummary called with null request");
-                return BadRequest(new { success = false, message = "Request body is required." });
-            }
+            if (req is null || req.SubId == Guid.Empty || string.IsNullOrWhiteSpace(req.TabType) || string.IsNullOrWhiteSpace(req.LoadLevel))
+                return BadRequest(new { error = "subId, tabType and loadLevel are required" });
 
-            if (request.SubId == Guid.Empty)
-            {
-                _logger.LogWarning("GetSummary called with empty SubId");
-                return BadRequest(new { success = false, message = "SubId is required." });
-            }
-
-            if (string.IsNullOrWhiteSpace(request.LoadLevel))
-            {
-                _logger.LogWarning("GetSummary called with empty LoadLevel");
-                return BadRequest(new { success = false, message = "LoadLevel is required." });
-            }
-
-            if (string.IsNullOrWhiteSpace(request.TabType))
-            {
-                _logger.LogWarning("GetSummary called with empty TabType");
-                return BadRequest(new { success = false, message = "TabType is required." });
-            }
-
-            if (string.IsNullOrWhiteSpace(OrgId))
-            {
-                _logger.LogError("OrgId is missing from context");
-                return BadRequest(new { success = false, message = "OrgId is missing." });
-            }
-
-            // Validate date range
-            if (request.FromDate.HasValue && request.ToDate.HasValue && request.FromDate.Value > request.ToDate.Value)
-            {
-                return BadRequest(new { success = false, message = "FromDate cannot be greater than ToDate." });
-            }
-
-            // Validate pagination
-            if (request.Offset < 0)
-            {
-                return BadRequest(new { success = false, message = "Offset cannot be negative." });
-            }
-
-            if (request.Limit <= 0 || request.Limit > 1000)
-            {
-                return BadRequest(new { success = false, message = "Limit must be between 1 and 1000." });
-            }
-
-            _logger.LogInformation(
-                "Fetching sales summary for OrgId: {OrgId}, SubId: {SubId}, Module: {Module}, Level: {Level}",
-                OrgId, request.SubId, request.TabType, request.LoadLevel);
+            req.Page = Math.Max(req.Page, 1);
+            req.PageSize = (req.PageSize <= 0 || req.PageSize > 1000) ? 100 : req.PageSize;
+            req.TabType = req.TabType.ToLowerInvariant();
+            req.LoadLevel = req.LoadLevel.ToLowerInvariant();
 
             try
             {
-                // Get JSON directly from database - ZERO conversion overhead!
-                var jsonResult = await _salesSummaryService.GetSalesSummaryJsonAsync(OrgId, request);
-
-                // Return raw JSON with proper content type
-                // ASP.NET Core automatically sets Content-Type: application/json
-                return Content(jsonResult, "application/json");
+                var json = await _salesSummaryService.GetSellerSalesSummaryJsonAsync(HttpContext.Items["OrgId"]?.ToString() ?? string.Empty, req);
+                if (string.IsNullOrWhiteSpace(json)) return NotFound(new { error = "no data" });
+                return Content(json, "application/json");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "Unexpected error in GetSummary for OrgId: {OrgId}, SubId: {SubId}",
-                    OrgId, request.SubId);
-
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = $"An unexpected error occurred: {ex.Message}"
-                });
+                _logger.LogError(ex, "GetSummary failed");
+                return StatusCode(500, new { error = "internal error" });
             }
         }
     }
