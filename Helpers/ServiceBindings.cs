@@ -31,6 +31,7 @@ namespace xQuantum_API.Helpers
             services.AddScoped<IUserRegistrationService, UserRegistrationService>();
             services.AddScoped<IInventoryService, InventoryService>();
             services.AddScoped<ISalesSummaryService, SalesSummaryService>();
+            services.AddScoped<ISalesGraphService, SalesGraphService>();
             services.AddScoped<ISubProductColumnService, SubProductColumnService>();
             services.AddScoped<ISellerSubscriptionService, SellerSubscriptionService>();
             // Add these lines in your service registration
