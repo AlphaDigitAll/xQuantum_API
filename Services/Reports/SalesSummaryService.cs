@@ -62,6 +62,35 @@ namespace xQuantum_API.Services.Reports
             return response.Success ? response.Data ?? BuildErrorJson("Empty data") : BuildErrorJson(response.Message);
         }
 
+        public async Task<string> GetSalesHeatmapJsonAsync(string orgId, SalesHeatmapRequest request)
+        {
+            if (request.SubId == Guid.Empty)
+                return BuildErrorJson("SubId is required.");
+
+            if (request.FromDate == default || request.ToDate == default)
+                return BuildErrorJson("FromDate and ToDate are required.");
+
+            var response = await ExecuteTenantOperation(orgId, async conn =>
+            {
+                const string sql = @"SELECT public.fn_get_sales_heatmap(
+                    @p_tab_type, @p_sub_id, @p_from_date, @p_to_date
+                );";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+
+                cmd.Parameters.Add("@p_tab_type", NpgsqlDbType.Integer).Value = (int)request.TabType;
+                cmd.Parameters.Add("@p_sub_id", NpgsqlDbType.Uuid).Value = request.SubId;
+                cmd.Parameters.Add("@p_from_date", NpgsqlDbType.Timestamp).Value = request.FromDate;
+                cmd.Parameters.Add("@p_to_date", NpgsqlDbType.Timestamp).Value = request.ToDate;
+
+                var result = await cmd.ExecuteScalarAsync();
+                return result?.ToString() ?? BuildErrorJson("No data returned.");
+
+            }, $"Get Sales Heatmap ({request.TabType})");
+
+            return response.Success ? response.Data ?? BuildErrorJson("Empty data") : BuildErrorJson(response.Message);
+        }
+
         private string BuildErrorJson(string message)
         {
             return System.Text.Json.JsonSerializer.Serialize(new

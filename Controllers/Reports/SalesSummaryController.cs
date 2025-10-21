@@ -75,13 +75,69 @@ namespace xQuantum_API.Controllers.Reports
 
             try
             {
-                var json = await _salesSummaryService.GetSellerSalesSummaryJsonAsync(HttpContext.Items["OrgId"]?.ToString() ?? string.Empty, req);
+                var json = await _salesSummaryService.GetSellerSalesSummaryJsonAsync(OrgId ?? string.Empty, req);
                 if (string.IsNullOrWhiteSpace(json)) return NotFound(new { error = "no data" });
                 return Content(json, "application/json");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "GetSummary failed");
+                return StatusCode(500, new { error = "internal error" });
+            }
+        }
+
+        /// <summary>
+        /// ULTRA-FAST heatmap endpoint - Returns JSON directly from PostgreSQL
+        /// Returns 7x24 array (days of week x hours) with aggregated sales metrics
+        /// NO C# conversion, NO object mapping, NO serialization overhead
+        /// </summary>
+        /// <param name="request">Heatmap request with tab type, sub_id, and date range</param>
+        /// <returns>Raw JSON with 7-day x 24-hour heatmap data</returns>
+        /// <remarks>
+        /// Sample Request:
+        /// POST /api/SalesSummary/GetHeatmap
+        /// {
+        ///   "tabType": 1,
+        ///   "subId": "47b8f57d-f59b-4e80-a6ac-d842e1520ff8",
+        ///   "fromDate": "2025-10-01T00:00:00",
+        ///   "toDate": "2025-10-31T23:59:59"
+        /// }
+        ///
+        /// Response Format:
+        /// {
+        ///   "success": true,
+        ///   "message": "Success",
+        ///   "data": {
+        ///     "dayHourData": [
+        ///       ["1,4,2,2,5,3,3,4,4,4,8,4,5,5,3,1,3,2,0,0,0,0,0,0"],  // Monday
+        ///       ["1,5,5,4,3,1,7,6,6,3,4,3,4,2,4,2,2,0,0,0,0,0,0,0"],  // Tuesday
+        ///       ...
+        ///     ]
+        ///   }
+        /// }
+        /// </remarks>
+        [HttpPost("heatmap")]
+        [Produces("application/json")]
+        public async Task<IActionResult> GetHeatmap([FromBody] SalesHeatmapRequest request)
+        {
+            if (request is null || request.SubId == Guid.Empty)
+                return BadRequest(new { error = "SubId is required" });
+
+            if (request.FromDate == default || request.ToDate == default)
+                return BadRequest(new { error = "FromDate and ToDate are required" });
+
+            if (!Enum.IsDefined(typeof(TabType), request.TabType))
+                return BadRequest(new { error = "Invalid TabType. Must be 1 (NoOfOrder), 2 (AvgOrder), or 3 (GrossSales)" });
+
+            try
+            {
+                var json = await _salesSummaryService.GetSalesHeatmapJsonAsync(OrgId ?? string.Empty, request);
+                if (string.IsNullOrWhiteSpace(json)) return NotFound(new { error = "no data" });
+                return Content(json, "application/json");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GetHeatmap failed for SubId: {SubId}, TabType: {TabType}", request.SubId, request.TabType);
                 return StatusCode(500, new { error = "internal error" });
             }
         }
