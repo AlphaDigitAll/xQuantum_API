@@ -65,12 +65,11 @@ namespace xQuantum_API.Controllers.Reports
         [Produces("application/json")]
         public async Task<IActionResult> GetSummary([FromBody] SummaryFilterRequest req)
         {
-            if (req is null || req.SubId == Guid.Empty || string.IsNullOrWhiteSpace(req.TabType) || string.IsNullOrWhiteSpace(req.TableName))
+            if (req is null || req.SubId == Guid.Empty || string.IsNullOrWhiteSpace(req.TableName) || string.IsNullOrWhiteSpace(req.TableName))
                 return BadRequest(new { error = "subId, tabType and loadLevel are required" });
 
             req.Page = Math.Max(req.Page, 1);
             req.PageSize = (req.PageSize <= 0 || req.PageSize > 1000) ? 100 : req.PageSize;
-            req.TabType = req.TabType.ToLowerInvariant();
             req.TableName = req.TableName.ToLowerInvariant();
 
             try

@@ -28,37 +28,55 @@ namespace xQuantum_API.Services.Reports
             if (request.SubId == Guid.Empty)
                 return BuildErrorJson("SubId is required.");
 
+            // 🔹 Dynamic function routing
+            string functionName = request.TableName switch
+            {
+                "product" => "public.fn_amz_get_seller_sales_summary_product",
+                "demographic" => "public.fn_amz_get_seller_sales_summary_demographic",
+                "shipping" => "public.fn_amz_get_seller_sales_summary_shipping",
+                "promotion" => "public.fn_amz_get_seller_sales_summary_promotion",
+                _ => "public.fn_amz_get_seller_sales_summary_date_and_time" 
+            };
+
             var response = await ExecuteTenantOperation(orgId, async conn =>
             {
-                const string sql = @"SELECT public.fn_amz_get_seller_sales_summary(
-                 @p_load_type, @p_load_level, @p_sub_id, @p_from_date, @p_to_date,
-                 @p_page, @p_page_size, @p_sort_field, @p_sort_order, @p_global_search, @p_filters
-                 );";
+                var sql = $@"
+            SELECT {functionName}(
+                @p_load_type,
+                @p_load_level,
+                @p_sub_id,
+                @p_from_date,
+                @p_to_date,
+                @p_page,
+                @p_page_size,
+                @p_sort_field,
+                @p_sort_order,
+                @p_global_search,
+                @p_filters
+            );";
 
                 await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@p_load_type", NpgsqlTypes.NpgsqlDbType.Text, request.TableName);
+                cmd.Parameters.AddWithValue("@p_load_level", NpgsqlTypes.NpgsqlDbType.Text, request.TableName?.ToLower() ?? "date");
+                cmd.Parameters.AddWithValue("@p_sub_id", NpgsqlTypes.NpgsqlDbType.Uuid, request.SubId);
+                cmd.Parameters.AddWithValue("@p_from_date", NpgsqlTypes.NpgsqlDbType.Date, (object?)request.FromDate ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@p_to_date", NpgsqlTypes.NpgsqlDbType.Date, (object?)request.ToDate ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@p_page", NpgsqlTypes.NpgsqlDbType.Integer, request.Page);
+                cmd.Parameters.AddWithValue("@p_page_size", NpgsqlTypes.NpgsqlDbType.Integer, request.PageSize);
+                cmd.Parameters.AddWithValue("@p_sort_field", NpgsqlTypes.NpgsqlDbType.Text, request.SortField ?? "order_date");
+                cmd.Parameters.AddWithValue("@p_sort_order", NpgsqlTypes.NpgsqlDbType.Text, request.SortOrder ?? "DESC");
+                cmd.Parameters.AddWithValue("@p_global_search", NpgsqlTypes.NpgsqlDbType.Text, (object?)request.GlobalSearch ?? DBNull.Value);
 
-                cmd.Parameters.Add("@p_load_type", NpgsqlTypes.NpgsqlDbType.Text).Value = request.TabType.ToLower();
-                cmd.Parameters.Add("@p_load_level", NpgsqlTypes.NpgsqlDbType.Text).Value = request.TableName.ToLower();
-                cmd.Parameters.Add("@p_sub_id", NpgsqlTypes.NpgsqlDbType.Uuid).Value = request.SubId;
-                cmd.Parameters.Add("@p_from_date", NpgsqlTypes.NpgsqlDbType.Date).Value = (object?)request.FromDate ?? DBNull.Value;
-                cmd.Parameters.Add("@p_to_date", NpgsqlTypes.NpgsqlDbType.Date).Value = (object?)request.ToDate ?? DBNull.Value;
-                cmd.Parameters.Add("@p_page", NpgsqlTypes.NpgsqlDbType.Integer).Value = request.Page;
-                cmd.Parameters.Add("@p_page_size", NpgsqlTypes.NpgsqlDbType.Integer).Value = request.PageSize;
-                cmd.Parameters.Add("@p_sort_field", NpgsqlTypes.NpgsqlDbType.Text).Value = request.SortField ?? "order_date";
-                cmd.Parameters.Add("@p_sort_order", NpgsqlTypes.NpgsqlDbType.Text).Value = request.SortOrder ?? "DESC";
-                cmd.Parameters.Add("@p_global_search", NpgsqlTypes.NpgsqlDbType.Text).Value = (object?)request.GlobalSearch ?? DBNull.Value;
-
-
-                var json = "{}";
-                if (request.Filters != null)
-                    json = System.Text.Json.JsonSerializer.Serialize(request.Filters, typeof(object));
-
-                cmd.Parameters.Add("@p_filters", NpgsqlTypes.NpgsqlDbType.Jsonb).Value = json;
+                var jsonFilters = request.Filters != null
+                    ? System.Text.Json.JsonSerializer.Serialize(request.Filters)
+                    : "{}";
+                cmd.Parameters.AddWithValue("@p_filters", NpgsqlTypes.NpgsqlDbType.Jsonb, jsonFilters);
 
                 var result = await cmd.ExecuteScalarAsync();
                 return result?.ToString() ?? BuildErrorJson("No data returned.");
+            },
+            $"Get Seller Summary ({request.TableName}/{request.TableName})");
 
-            }, $"Get Seller Summary ({request.TabType}/{request.TableName})");
             return response.Success ? response.Data ?? BuildErrorJson("Empty data") : BuildErrorJson(response.Message);
         }
 
