@@ -29,12 +29,12 @@ namespace xQuantum_API.Services.Reports
                 return BuildErrorJson("SubId is required.");
 
             // 🔹 Dynamic function routing
-            string functionName = request.TableName switch
+            string functionName = request.TabType switch
             {
-                "product" => "public.fn_amz_get_seller_sales_summary_product",
-                "demographic" => "public.fn_amz_get_seller_sales_summary_demographic",
-                "shipping" => "public.fn_amz_get_seller_sales_summary_shipping",
-                "promotion" => "public.fn_amz_get_seller_sales_summary_promotion",
+                2 => "public.fn_amz_get_seller_sales_summary_product",
+                3 => "public.fn_amz_get_seller_sales_summary_demographic",
+                4 => "public.fn_amz_get_seller_sales_summary_shipping",
+                5=> "public.fn_amz_get_seller_sales_summary_promotion",
                 _ => "public.fn_amz_get_seller_sales_summary_date_and_time" 
             };
 
