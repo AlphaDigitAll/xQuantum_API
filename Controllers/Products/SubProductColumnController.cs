@@ -134,5 +134,62 @@ namespace xQuantum_API.Controllers.Products
             var response = await _service.UpsertColumnValueAsync(OrgId, model);
             return response.Success ? Ok(response) : BadRequest(response);
         }
+
+        /// <summary>
+        /// ULTRA-FAST bulk upsert for product column values
+        /// Can process 1000+ records in milliseconds using PostgreSQL UNNEST + ON CONFLICT
+        /// Returns JSON with statistics: inserted, updated, total
+        /// </summary>
+        /// <remarks>
+        /// Sample Request:
+        /// POST /api/SubProductColumn/bulk-upsert-column-values
+        /// {
+        ///   "subId": "47b8f57d-f59b-4e80-a6ac-d842e1520ff8",
+        ///   "items": [
+        ///     { "productAsin": "B001", "columnId": 1, "value": "Red" },
+        ///     { "productAsin": "B002", "columnId": 1, "value": "Blue" },
+        ///     { "productAsin": "B003", "columnId": 2, "value": "Large" }
+        ///   ]
+        /// }
+        ///
+        /// Response:
+        /// {
+        ///   "success": true,
+        ///   "message": "Processed 3 records: 2 inserted, 1 updated",
+        ///   "data": {
+        ///     "inserted": 2,
+        ///     "updated": 1,
+        ///     "total": 3
+        ///   }
+        /// }
+        /// </remarks>
+        [HttpPost("bulk-upsert-column-values")]
+        [Produces("application/json")]
+        public async Task<IActionResult> BulkUpsertColumnValues([FromBody] BulkUpsertSubProductColumnValuesRequest request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            if (request.Items == null || request.Items.Count == 0)
+                return BadRequest(new { error = "At least one item is required" });
+
+            if (request.Items.Count > 10000)
+                return BadRequest(new { error = "Maximum 10,000 items allowed per request" });
+
+            try
+            {
+                var json = await _service.BulkUpsertColumnValuesAsync(OrgId ?? string.Empty, request.SubId, request.Items, UserIdGuid);
+
+                if (string.IsNullOrWhiteSpace(json))
+                    return NotFound(new { error = "No data returned" });
+
+                return Content(json, "application/json");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "BulkUpsertColumnValues failed for SubId: {SubId}, Items: {Count}", request.SubId, request.Items.Count);
+                return StatusCode(500, new { error = "Internal error", details = ex.Message });
+            }
+        }
     }
 }

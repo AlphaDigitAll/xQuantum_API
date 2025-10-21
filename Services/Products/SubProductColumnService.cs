@@ -288,5 +288,63 @@ namespace xQuantum_API.Services.Products
                 }
             }, "Upsert SubProductColumnValue");
         }
+
+        /// <summary>
+        /// ULTRA-FAST bulk upsert for product column values
+        /// Uses PostgreSQL UNNEST + ON CONFLICT for maximum performance
+        /// Can process 1000+ records in milliseconds
+        /// </summary>
+        public async Task<string> BulkUpsertColumnValuesAsync(string orgId, Guid subId, List<BulkUpsertColumnValueItem> items, Guid userId)
+        {
+            if (items == null || items.Count == 0)
+            {
+                return BuildBulkErrorJson("No items provided");
+            }
+
+            var response = await ExecuteTenantOperation(orgId, async conn =>
+            {
+                // Prepare arrays for PostgreSQL UNNEST
+                var productAsins = items.Select(x => x.ProductAsin).ToArray();
+                var columnIds = items.Select(x => x.ColumnId).ToArray();
+                var values = items.Select(x => x.Value ?? string.Empty).ToArray();
+
+                const string sql = @"
+                    SELECT public.fn_bulk_upsert_product_column_values(
+                        @p_sub_id,
+                        @p_product_asins,
+                        @p_column_ids,
+                        @p_values,
+                        @p_user_id
+                    );";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@p_sub_id", subId);
+                cmd.Parameters.AddWithValue("@p_product_asins", productAsins);
+                cmd.Parameters.AddWithValue("@p_column_ids", columnIds);
+                cmd.Parameters.AddWithValue("@p_values", values);
+                cmd.Parameters.AddWithValue("@p_user_id", userId);
+
+                var result = await cmd.ExecuteScalarAsync();
+                return result?.ToString() ?? BuildBulkErrorJson("No data returned");
+
+            }, $"Bulk Upsert {items.Count} Column Values");
+
+            return response.Success ? response.Data ?? BuildBulkErrorJson("Empty data") : BuildBulkErrorJson(response.Message);
+        }
+
+        private string BuildBulkErrorJson(string message)
+        {
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = false,
+                message = message,
+                data = new
+                {
+                    inserted = 0,
+                    updated = 0,
+                    total = 0
+                }
+            });
+        }
     }
 }
