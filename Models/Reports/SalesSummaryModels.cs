@@ -1,8 +1,6 @@
 namespace xQuantum_API.Models.Reports
 {
-    /// <summary>
-    /// Request model for fetching sales summary data
-    /// </summary>
+ 
     public enum SummaryTabType
     {
         DateAndTime = 1,
@@ -15,7 +13,7 @@ namespace xQuantum_API.Models.Reports
     public class SummaryFilterRequest
     {
         public Guid SubId { get; set; }
-        public int TabType { get; set; } // numeric tab from frontend (1–5)
+        public int TabType { get; set; } 
         public string TableName { get; set; } = string.Empty;
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
@@ -39,9 +37,7 @@ namespace xQuantum_API.Models.Reports
     }
 
 
-    /// <summary>
-    /// Request model for fetching sales graph aggregate data (no pagination)
-    /// </summary>
+   
     public class GraphFilterRequest
     {
         public Guid SubId { get; set; }
