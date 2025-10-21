@@ -38,7 +38,7 @@ namespace xQuantum_API.Services.Reports
                 await using var cmd = new NpgsqlCommand(sql, conn);
 
                 cmd.Parameters.Add("@p_load_type", NpgsqlTypes.NpgsqlDbType.Text).Value = request.TabType.ToLower();
-                cmd.Parameters.Add("@p_load_level", NpgsqlTypes.NpgsqlDbType.Text).Value = request.LoadLevel.ToLower();
+                cmd.Parameters.Add("@p_load_level", NpgsqlTypes.NpgsqlDbType.Text).Value = request.TableName.ToLower();
                 cmd.Parameters.Add("@p_sub_id", NpgsqlTypes.NpgsqlDbType.Uuid).Value = request.SubId;
                 cmd.Parameters.Add("@p_from_date", NpgsqlTypes.NpgsqlDbType.Date).Value = (object?)request.FromDate ?? DBNull.Value;
                 cmd.Parameters.Add("@p_to_date", NpgsqlTypes.NpgsqlDbType.Date).Value = (object?)request.ToDate ?? DBNull.Value;
@@ -58,7 +58,7 @@ namespace xQuantum_API.Services.Reports
                 var result = await cmd.ExecuteScalarAsync();
                 return result?.ToString() ?? BuildErrorJson("No data returned.");
 
-            }, $"Get Seller Summary ({request.TabType}/{request.LoadLevel})");
+            }, $"Get Seller Summary ({request.TabType}/{request.TableName})");
             return response.Success ? response.Data ?? BuildErrorJson("Empty data") : BuildErrorJson(response.Message);
         }
 

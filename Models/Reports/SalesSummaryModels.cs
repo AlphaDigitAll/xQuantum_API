@@ -7,7 +7,7 @@ namespace xQuantum_API.Models.Reports
     {
         public Guid SubId { get; set; }
         public string TabType { get; set; } = "order";
-        public string LoadLevel { get; set; } = "day";
+        public string TableName { get; set; } = "date";
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
         public int Page { get; set; } = 1;
@@ -24,9 +24,9 @@ namespace xQuantum_API.Models.Reports
     public class GraphFilterRequest
     {
         public Guid SubId { get; set; }
-        public string LoadLevel { get; set; } = string.Empty;
+        public string ChartName { get; set; } = string.Empty;
         public string TabType { get; set; } = string.Empty;
-        public Dictionary<string, string> Filters { get; set; } = new();
+        public Dictionary<string, string>? Filters { get; set; } = new();
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
     }

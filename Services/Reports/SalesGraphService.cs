@@ -1,4 +1,4 @@
-using Npgsql;
+﻿using Npgsql;
 using NpgsqlTypes;
 using xQuantum_API.Interfaces.Reports;
 using xQuantum_API.Interfaces.Tenant;
@@ -27,96 +27,65 @@ namespace xQuantum_API.Services.Reports
         /// NO deserialization, NO re-serialization, NO C# object mapping
         /// Pure passthrough for maximum performance
         /// </summary>
-        public async Task<string> GetSalesGraphAggregatesJsonAsync(
-            string orgId,
-            GraphFilterRequest request)
+        public async Task<string> GetSalesGraphAggregatesJsonAsync(string orgId, GraphFilterRequest request)
         {
-            // Validate required parameters
             if (request.SubId == Guid.Empty)
-            {
                 return BuildErrorJson("SubId is required.");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.LoadLevel))
-            {
-                return BuildErrorJson("LoadLevel is required (day, week, month, or hour).");
-            }
-
+            if (string.IsNullOrWhiteSpace(request.ChartName))
+                return BuildErrorJson("ChartName is required (hour, day, week, month, date).");
             if (string.IsNullOrWhiteSpace(request.TabType))
-            {
                 return BuildErrorJson("TabType is required (e.g., order, business, inventory).");
-            }
-
-            // Validate LoadLevel values
-            var validLoadLevels = new[] { "day", "week", "month", "hour" };
-            if (!validLoadLevels.Contains(request.LoadLevel.ToLower()))
-            {
-                return BuildErrorJson($"Invalid LoadLevel. Must be one of: {string.Join(", ", validLoadLevels)}");
-            }
+            var validCharts = new[] { "hour", "day", "week", "month", "date" };
+            if (!validCharts.Contains(request.ChartName.ToLower()))
+                return BuildErrorJson($"Invalid ChartName. Must be one of: {string.Join(", ", validCharts)}");
 
             try
             {
                 var result = await ExecuteTenantOperation(orgId, async conn =>
                 {
-                    // Call the optimized PostgreSQL function for graph aggregates
                     const string sql = @"
-                        SELECT fn_get_sales_graph_aggregates(
-                            @p_module,
-                            @p_load_level,
-                            @p_sub_id,
-                            @p_filters,
-                            @p_from_date,
-                            @p_to_date
-                        )";
+                SELECT fn_amz_get_seller_sales_graph(
+                    @p_load_type,
+                    @p_chart_name,
+                    @p_sub_id,
+                    @p_from_date,
+                    @p_to_date,
+                    @p_filters
+                );";
 
                     await using var cmd = new NpgsqlCommand(sql, conn);
 
-                    // Add parameters
-                    cmd.Parameters.AddWithValue("@p_module", request.TabType.ToLower());
-                    cmd.Parameters.AddWithValue("@p_load_level", request.LoadLevel.ToLower());
+                    cmd.Parameters.AddWithValue("@p_load_type", request.TabType.ToLower());
+                    cmd.Parameters.AddWithValue("@p_chart_name", request.ChartName.ToLower());
                     cmd.Parameters.AddWithValue("@p_sub_id", request.SubId);
-
-                    // Convert filters to JSONB - this is the ONLY conversion we do
+                    cmd.Parameters.Add("@p_from_date", NpgsqlTypes.NpgsqlDbType.Date).Value = (object?)request.FromDate ?? DBNull.Value;
+                    cmd.Parameters.Add("@p_to_date", NpgsqlTypes.NpgsqlDbType.Date).Value = (object?)request.ToDate ?? DBNull.Value;
                     var filtersJson = System.Text.Json.JsonSerializer.Serialize(request.Filters ?? new Dictionary<string, string>());
-                    cmd.Parameters.Add(new NpgsqlParameter("@p_filters", NpgsqlDbType.Jsonb) { Value = filtersJson });
+                    cmd.Parameters.Add(new NpgsqlParameter("@p_filters", NpgsqlTypes.NpgsqlDbType.Jsonb) { Value = filtersJson });
 
-                    cmd.Parameters.AddWithValue("@p_from_date",
-                        request.FromDate.HasValue ? (object)request.FromDate.Value : DBNull.Value);
-                    cmd.Parameters.AddWithValue("@p_to_date",
-                        request.ToDate.HasValue ? (object)request.ToDate.Value : DBNull.Value);
-
-                    // Get JSON directly from database - NO CONVERSION!
                     var jsonResult = await cmd.ExecuteScalarAsync();
 
                     if (jsonResult == null || jsonResult == DBNull.Value)
-                    {
                         return BuildErrorJson("No data returned from database.");
-                    }
 
-                    // Return raw JSON string - database already formatted everything perfectly!
                     return jsonResult.ToString() ?? BuildErrorJson("Failed to retrieve data.");
-
-                }, $"Get Sales Graph Aggregates - {request.TabType}/{request.LoadLevel}");
+                }, $"Get Sales Graph Aggregates - {request.TabType}/{request.ChartName}");
 
                 return result.Success ? result.Data! : BuildErrorJson(result.Message);
             }
             catch (PostgresException pgEx)
             {
-                Logger.LogError(pgEx,
-                    "PostgreSQL error while fetching sales graph aggregates for OrgId: {OrgId}, Module: {Module}, Level: {Level}",
-                    orgId, request.TabType, request.LoadLevel);
-
+                Logger.LogError(pgEx, "PostgreSQL error while fetching sales graph aggregates for OrgId: {OrgId}, Module: {Module}, Chart: {Chart}", orgId, request.TabType, request.ChartName);
                 return BuildErrorJson($"Database error: {pgEx.Message}");
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex,
-                    "Unexpected error while fetching sales graph aggregates for OrgId: {OrgId}, Module: {Module}, Level: {Level}",
-                    orgId, request.TabType, request.LoadLevel);
-
+                Logger.LogError(ex, "Unexpected error while fetching sales graph aggregates for OrgId: {OrgId}, Module: {Module}, Chart: {Chart}", orgId, request.TabType, request.ChartName);
                 return BuildErrorJson($"Unexpected error: {ex.Message}");
             }
         }
+
+
 
         /// <summary>
         /// Build error response in JSON format (matches PostgreSQL function output)
