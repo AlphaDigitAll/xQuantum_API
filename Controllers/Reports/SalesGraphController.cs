@@ -75,7 +75,7 @@ namespace xQuantum_API.Controllers.Reports
                 return BadRequest(new { success = false, message = "SubId is required." });
             }
 
-            if (string.IsNullOrWhiteSpace(request.LoadLevel))
+            if (string.IsNullOrWhiteSpace(request.ChartName))
             {
                 _logger.LogWarning("GetGraphData called with empty LoadLevel");
                 return BadRequest(new { success = false, message = "LoadLevel is required." });
@@ -101,7 +101,7 @@ namespace xQuantum_API.Controllers.Reports
 
             _logger.LogInformation(
                 "Fetching sales graph aggregates for OrgId: {OrgId}, SubId: {SubId}, Module: {Module}, Level: {Level}",
-                OrgId, request.SubId, request.TabType, request.LoadLevel);
+                OrgId, request.SubId, request.TabType, request.ChartName);
 
             try
             {
