@@ -33,18 +33,22 @@ namespace xQuantum_API.Services.Reports
                 return BuildErrorJson("SubId is required.");
             if (string.IsNullOrWhiteSpace(request.ChartName))
                 return BuildErrorJson("ChartName is required (hour, day, week, month, date).");
-            if (string.IsNullOrWhiteSpace(request.TabType))
-                return BuildErrorJson("TabType is required (e.g., order, business, inventory).");
-            var validCharts = new[] { "hour", "day", "week", "month", "date" };
-            if (!validCharts.Contains(request.ChartName.ToLower()))
-                return BuildErrorJson($"Invalid ChartName. Must be one of: {string.Join(", ", validCharts)}");
 
             try
             {
+                string functionName = request.TabType switch
+                {
+                    2 => "public.fn_amz_get_seller_sales_summary_product_graph",  
+                    3 => "public.fn_amz_get_seller_sales_summary_demographic_graph", 
+                    4 => "public.fn_amz_get_seller_sales_summary_shipping_graph",    
+                    5 => "public.fn_amz_get_seller_sales_summary_promotion_graph", 
+                    _ => "public.fn_amz_get_seller_sales_summary_graph"
+                };
+
                 var result = await ExecuteTenantOperation(orgId, async conn =>
                 {
-                    const string sql = @"
-                SELECT fn_amz_get_seller_sales_graph(
+                    var sql = $@"
+                SELECT {functionName}(
                     @p_load_type,
                     @p_chart_name,
                     @p_sub_id,
@@ -55,11 +59,12 @@ namespace xQuantum_API.Services.Reports
 
                     await using var cmd = new NpgsqlCommand(sql, conn);
 
-                    cmd.Parameters.AddWithValue("@p_load_type", request.TabType.ToLower());
-                    cmd.Parameters.AddWithValue("@p_chart_name", request.ChartName.ToLower());
-                    cmd.Parameters.AddWithValue("@p_sub_id", request.SubId);
-                    cmd.Parameters.Add("@p_from_date", NpgsqlTypes.NpgsqlDbType.Date).Value = (object?)request.FromDate ?? DBNull.Value;
-                    cmd.Parameters.Add("@p_to_date", NpgsqlTypes.NpgsqlDbType.Date).Value = (object?)request.ToDate ?? DBNull.Value;
+                    cmd.Parameters.AddWithValue("@p_load_type", NpgsqlTypes.NpgsqlDbType.Text, request.LoadTypeText);
+                    cmd.Parameters.AddWithValue("@p_chart_name", NpgsqlTypes.NpgsqlDbType.Text, request.ChartName.ToLower());
+                    cmd.Parameters.AddWithValue("@p_sub_id", NpgsqlTypes.NpgsqlDbType.Uuid, request.SubId);
+                    cmd.Parameters.AddWithValue("@p_from_date", NpgsqlTypes.NpgsqlDbType.Timestamp, (object?)request.FromDate ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@p_to_date", NpgsqlTypes.NpgsqlDbType.Timestamp, (object?)request.ToDate ?? DBNull.Value);
+
                     var filtersJson = System.Text.Json.JsonSerializer.Serialize(request.Filters ?? new Dictionary<string, string>());
                     cmd.Parameters.Add(new NpgsqlParameter("@p_filters", NpgsqlTypes.NpgsqlDbType.Jsonb) { Value = filtersJson });
 
@@ -84,8 +89,6 @@ namespace xQuantum_API.Services.Reports
                 return BuildErrorJson($"Unexpected error: {ex.Message}");
             }
         }
-
-
 
         /// <summary>
         /// Build error response in JSON format (matches PostgreSQL function output)

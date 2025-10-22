@@ -81,7 +81,7 @@ namespace xQuantum_API.Controllers.Reports
                 return BadRequest(new { success = false, message = "LoadLevel is required." });
             }
 
-            if (string.IsNullOrWhiteSpace(request.TabType))
+            if (request.TabType==0)
             {
                 _logger.LogWarning("GetGraphData called with empty TabType");
                 return BadRequest(new { success = false, message = "TabType is required." });
