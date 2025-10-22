@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Npgsql;
 using NpgsqlTypes;
+using xQuantum_API.Helpers;
 using xQuantum_API.Interfaces.Reports;
 using xQuantum_API.Interfaces.Tenant;
 using xQuantum_API.Models.Common;
@@ -25,8 +26,20 @@ namespace xQuantum_API.Services.Reports
 
         public async Task<string> GetSellerSalesSummaryJsonAsync(string orgId, SummaryFilterRequest request)
         {
+            // Validate required fields
+            if (request == null)
+                return JsonResponseBuilder.BuildErrorJson("Request is required.");
+
             if (request.SubId == Guid.Empty)
-                return BuildErrorJson("SubId is required.");
+                return JsonResponseBuilder.BuildErrorJson("SubId is required.");
+
+            if (string.IsNullOrWhiteSpace(request.TableName))
+                return JsonResponseBuilder.BuildErrorJson("TableName is required.");
+
+            // Normalize and apply business rules
+            request.Page = Math.Max(request.Page, 1); // Ensure page >= 1
+            request.PageSize = (request.PageSize <= 0 || request.PageSize > 1000) ? 100 : request.PageSize; // Default to 100, max 1000
+            request.TableName = request.TableName.ToLowerInvariant(); // Normalize to lowercase
 
             string functionName = request.TabType switch
             {
@@ -72,19 +85,19 @@ namespace xQuantum_API.Services.Reports
                 cmd.Parameters.AddWithValue("@p_filters", NpgsqlTypes.NpgsqlDbType.Jsonb, jsonFilters);
 
                 var result = await cmd.ExecuteScalarAsync();
-                return result?.ToString() ?? BuildErrorJson("No data returned.");
+                return result?.ToString() ?? JsonResponseBuilder.BuildErrorJson("No data returned.");
             },
             $"Get Seller Summary ({request.TableName}/{request.TableName})");
 
-            return response.Success ? response.Data ?? BuildErrorJson("Empty data") : BuildErrorJson(response.Message);
+            return response.Success ? response.Data ?? JsonResponseBuilder.BuildErrorJson("Empty data") : JsonResponseBuilder.BuildErrorJson(response.Message);
         }
         public async Task<string> GetSalesHeatmapJsonAsync(string orgId, SalesHeatmapRequest request)
         {
             if (request.SubId == Guid.Empty)
-                return BuildErrorJson("SubId is required.");
+                return JsonResponseBuilder.BuildErrorJson("SubId is required.");
 
             if (request.FromDate == default || request.ToDate == default)
-                return BuildErrorJson("FromDate and ToDate are required.");
+                return JsonResponseBuilder.BuildErrorJson("FromDate and ToDate are required.");
 
             var response = await ExecuteTenantOperation(orgId, async conn =>
             {
@@ -100,21 +113,11 @@ namespace xQuantum_API.Services.Reports
                 cmd.Parameters.Add("@p_to_date", NpgsqlDbType.Timestamp).Value = request.ToDate;
 
                 var result = await cmd.ExecuteScalarAsync();
-                return result?.ToString() ?? BuildErrorJson("No data returned.");
+                return result?.ToString() ?? JsonResponseBuilder.BuildErrorJson("No data returned.");
 
             }, $"Get Sales Heatmap ({request.TabType})");
 
-            return response.Success ? response.Data ?? BuildErrorJson("Empty data") : BuildErrorJson(response.Message);
-        }
-
-        private string BuildErrorJson(string message)
-        {
-            return System.Text.Json.JsonSerializer.Serialize(new
-            {
-                success = false,
-                message = message,
-                data = (object?)null
-            });
+            return response.Success ? response.Data ?? JsonResponseBuilder.BuildErrorJson("Empty data") : JsonResponseBuilder.BuildErrorJson(response.Message);
         }
 
     }

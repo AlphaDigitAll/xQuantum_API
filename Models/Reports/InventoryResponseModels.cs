@@ -1,20 +1,8 @@
-﻿namespace xQuantum_API.Models.Reports
+namespace xQuantum_API.Models.Reports
 {
-    public class InventoryQueryRequest
-    {
-        public Guid SubId { get; set; }
-        public int Page { get; set; } = 1;
-        public int PageSize { get; set; } = 10;
-        public string? SortField { get; set; } = "id"; // default
-        public int SortOrder { get; set; } = 1; // 1 = ASC, -1 = DESC
-        public string? GlobalSearch { get; set; } = null;
-        public Dictionary<string, object> Filters { get; set; } = new();
-    }
-    public class InventoryCardSummaryRequest
-    {
-        public Guid SubId { get; set; }
-    }
-    
+    /// <summary>
+    /// Summary of inventory quantities grouped by status
+    /// </summary>
     public class InventoryCardSummary
     {
         public Guid sub_id { get; set; }
@@ -23,6 +11,9 @@
         public UnfulfillableGroup Unfulfillable_Quantity { get; set; } = new();
     }
 
+    /// <summary>
+    /// Fulfillable inventory quantities breakdown
+    /// </summary>
     public class FulfillableGroup
     {
         public int fulfillable_quantity { get; set; }
@@ -31,6 +22,9 @@
         public int receiving_quantity { get; set; }
     }
 
+    /// <summary>
+    /// Reserved inventory quantities breakdown
+    /// </summary>
     public class ReservedGroup
     {
         public int total_reserved_quantity { get; set; }
@@ -39,6 +33,9 @@
         public int fc_processing_quantity { get; set; }
     }
 
+    /// <summary>
+    /// Unfulfillable inventory quantities breakdown
+    /// </summary>
     public class UnfulfillableGroup
     {
         public int unfulfillable_quantity { get; set; }
@@ -49,5 +46,4 @@
         public int defective_quantity { get; set; }
         public int expired_quantity { get; set; }
     }
-
 }

@@ -2,6 +2,7 @@
 using Newtonsoft.Json.Linq;
 using Npgsql;
 using OfficeOpenXml;
+using xQuantum_API.Helpers;
 using xQuantum_API.Interfaces.Products;
 using xQuantum_API.Interfaces.Tenant;
 using xQuantum_API.Models.Common;
@@ -299,7 +300,7 @@ namespace xQuantum_API.Services.Products
         {
             if (items == null || items.Count == 0)
             {
-                return BuildBulkErrorJson("No items provided");
+                return JsonResponseBuilder.BuildBulkErrorJson("No items provided");
             }
 
             var response = await ExecuteTenantOperation(orgId, async conn =>
@@ -326,27 +327,13 @@ namespace xQuantum_API.Services.Products
                 cmd.Parameters.AddWithValue("@p_user_id", userId);
 
                 var result = await cmd.ExecuteScalarAsync();
-                return result?.ToString() ?? BuildBulkErrorJson("No data returned");
+                return result?.ToString() ?? JsonResponseBuilder.BuildBulkErrorJson("No data returned");
 
             }, $"Bulk Upsert {items.Count} Column Values");
 
-            return response.Success ? response.Data ?? BuildBulkErrorJson("Empty data") : BuildBulkErrorJson(response.Message);
+            return response.Success ? response.Data ?? JsonResponseBuilder.BuildBulkErrorJson("Empty data") : JsonResponseBuilder.BuildBulkErrorJson(response.Message);
         }
 
-        private string BuildBulkErrorJson(string message)
-        {
-            return System.Text.Json.JsonSerializer.Serialize(new
-            {
-                success = false,
-                message = message,
-                data = new
-                {
-                    inserted = 0,
-                    updated = 0,
-                    total = 0
-                }
-            });
-        }
 
         public async Task<string> BulkUpsertFromExcelAsync(string orgId, BulkUpsertFromExcelRequest request, Guid userId)
         {
@@ -364,7 +351,7 @@ namespace xQuantum_API.Services.Products
 
                 if (worksheet.Dimension == null)
                 {
-                    return BuildExcelErrorJson("Excel file is empty");
+                    return JsonResponseBuilder.BuildBulkErrorJson("Excel file is empty");
                 }
 
                 var rowCount = worksheet.Dimension.End.Row;
@@ -372,7 +359,7 @@ namespace xQuantum_API.Services.Products
 
                 if (rowCount < 2)
                 {
-                    return BuildExcelErrorJson("Excel must have at least a header row and one data row");
+                    return JsonResponseBuilder.BuildBulkErrorJson("Excel must have at least a header row and one data row");
                 }
 
                 // ========================================
@@ -409,12 +396,12 @@ namespace xQuantum_API.Services.Products
 
                 if (asinColumnIndex == -1)
                 {
-                    return BuildExcelErrorJson("Excel must have a 'product_asin' column");
+                    return JsonResponseBuilder.BuildBulkErrorJson("Excel must have a 'product_asin' column");
                 }
 
                 if (columnNames.Count == 0)
                 {
-                    return BuildExcelErrorJson("No valid columns found (all columns are excluded)");
+                    return JsonResponseBuilder.BuildBulkErrorJson("No valid columns found (all columns are excluded)");
                 }
 
                 // ========================================
@@ -444,7 +431,7 @@ namespace xQuantum_API.Services.Products
 
                 if (productAsins.Count == 0)
                 {
-                    return BuildExcelErrorJson("No valid product ASINs found in Excel");
+                    return JsonResponseBuilder.BuildBulkErrorJson("No valid product ASINs found in Excel");
                 }
 
                 // ========================================
@@ -493,36 +480,20 @@ namespace xQuantum_API.Services.Products
                     cmd.Parameters.AddWithValue("@p_org_id", orgId ?? string.Empty);
 
                     var result = await cmd.ExecuteScalarAsync();
-                    return result?.ToString() ?? BuildExcelErrorJson("No data returned from database");
+                    return result?.ToString() ?? JsonResponseBuilder.BuildBulkErrorJson("No data returned from database");
 
                 }, $"Bulk Upsert from Excel: {productAsins.Count} products, {columnNames.Count} columns");
 
                 return response.Success
-                    ? response.Data ?? BuildExcelErrorJson("Empty data")
-                    : BuildExcelErrorJson(response.Message);
+                    ? response.Data ?? JsonResponseBuilder.BuildBulkErrorJson("Empty data")
+                    : JsonResponseBuilder.BuildBulkErrorJson(response.Message);
             }
             catch (Exception ex)
             {
-                return BuildExcelErrorJson($"Exception: {ex.Message}");
+                return JsonResponseBuilder.BuildBulkErrorJson($"Exception: {ex.Message}");
             }
         }
 
-        private string BuildExcelErrorJson(string message)
-        {
-            return System.Text.Json.JsonSerializer.Serialize(new
-            {
-                success = false,
-                message = message,
-                data = new
-                {
-                    columnsProcessed = 0,
-                    valuesUpserted = 0,
-                    productsProcessed = 0,
-                    elapsedMs = 0,
-                    processedColumns = new string[] { }
-                }
-            });
-        }
 
         public async Task<byte[]> ExportProductsToExcelAsync(string orgId, ExportProductsToExcelRequest request)
         {
@@ -624,29 +595,5 @@ namespace xQuantum_API.Services.Products
             return response.Data ?? Array.Empty<byte>();
         }
 
-        // Helper classes for JSON deserialization
-        private class ColumnInfo
-        {
-            [JsonProperty("id")]
-            public int Id { get; set; }
-
-            [JsonProperty("columnName")]
-            public string ColumnName { get; set; } = string.Empty;
-        }
-
-        private class ProductExportRow
-        {
-            [JsonProperty("asin")]
-            public string Asin { get; set; } = string.Empty;
-
-            [JsonProperty("name")]
-            public string Name { get; set; } = string.Empty;
-
-            [JsonProperty("image")]
-            public string Image { get; set; } = string.Empty;
-
-            [JsonProperty("columnValues")]
-            public Dictionary<string, string>? ColumnValues { get; set; }
-        }
     }
 }

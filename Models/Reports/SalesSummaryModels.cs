@@ -1,19 +1,15 @@
+using xQuantum_API.Models.Common;
+
 namespace xQuantum_API.Models.Reports
 {
- 
-    public enum SummaryTabType
-    {
-        DateAndTime = 1,
-        Product = 2,     
-        Demographic = 3,  
-        Shipping = 4,     
-        Promotion = 5      
-    }
 
+    /// <summary>
+    /// Request model for sales summary data with filtering and pagination
+    /// </summary>
     public class SummaryFilterRequest
     {
         public Guid SubId { get; set; }
-        public int TabType { get; set; } 
+        public int TabType { get; set; }
         public string TableName { get; set; } = string.Empty;
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
@@ -32,30 +28,6 @@ namespace xQuantum_API.Models.Reports
                 (int)SummaryTabType.Demographic => "demographic",
                 (int)SummaryTabType.Shipping => "shipping",
                 (int)SummaryTabType.Promotion => "promotion",
-                _ => "order"
-            };
-    }
-
-
-
-    public class GraphFilterRequest
-    {
-        public Guid SubId { get; set; }
-
-        public string ChartName { get; set; } = string.Empty;
-        public int TabType { get; set; }
-        public Dictionary<string, string>? Filters { get; set; } = new();
-        public DateTime? FromDate { get; set; }
-        public DateTime? ToDate { get; set; }
-
-        public string LoadTypeText =>
-            ((SummaryTabType)TabType) switch
-            {
-                SummaryTabType.DateAndTime => "dateandtime",
-                SummaryTabType.Product => "product",
-                SummaryTabType.Demographic => "demographic",
-                SummaryTabType.Shipping => "shipping",
-                SummaryTabType.Promotion => "promotion",
                 _ => "order"
             };
     }

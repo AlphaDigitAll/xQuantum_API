@@ -1,5 +1,6 @@
 ﻿using Npgsql;
 using NpgsqlTypes;
+using xQuantum_API.Helpers;
 using xQuantum_API.Interfaces.Reports;
 using xQuantum_API.Interfaces.Tenant;
 using xQuantum_API.Models.Common;
@@ -29,10 +30,30 @@ namespace xQuantum_API.Services.Reports
         /// </summary>
         public async Task<string> GetSalesGraphAggregatesJsonAsync(string orgId, GraphFilterRequest request)
         {
+            // Validate required fields
+            if (request == null)
+                return JsonResponseBuilder.BuildErrorJson("Request body is required.");
+
             if (request.SubId == Guid.Empty)
-                return BuildErrorJson("SubId is required.");
+                return JsonResponseBuilder.BuildErrorJson("SubId is required.");
+
             if (string.IsNullOrWhiteSpace(request.ChartName))
-                return BuildErrorJson("ChartName is required (hour, day, week, month, date).");
+                return JsonResponseBuilder.BuildErrorJson("ChartName is required (hour, day, week, month, date).");
+
+            if (request.TabType == 0)
+                return JsonResponseBuilder.BuildErrorJson("TabType is required.");
+
+            if (string.IsNullOrWhiteSpace(orgId))
+                return JsonResponseBuilder.BuildErrorJson("OrgId is missing.");
+
+            // Validate date range business rule
+            if (request.FromDate.HasValue && request.ToDate.HasValue && request.FromDate.Value > request.ToDate.Value)
+                return JsonResponseBuilder.BuildErrorJson("FromDate cannot be greater than ToDate.");
+
+            // Log the operation
+            Logger.LogInformation(
+                "Fetching sales graph aggregates for OrgId: {OrgId}, SubId: {SubId}, Module: {Module}, Level: {Level}",
+                orgId, request.SubId, request.TabType, request.ChartName);
 
             try
             {
@@ -71,36 +92,23 @@ namespace xQuantum_API.Services.Reports
                     var jsonResult = await cmd.ExecuteScalarAsync();
 
                     if (jsonResult == null || jsonResult == DBNull.Value)
-                        return BuildErrorJson("No data returned from database.");
+                        return JsonResponseBuilder.BuildErrorJson("No data returned from database.");
 
-                    return jsonResult.ToString() ?? BuildErrorJson("Failed to retrieve data.");
+                    return jsonResult.ToString() ?? JsonResponseBuilder.BuildErrorJson("Failed to retrieve data.");
                 }, $"Get Sales Graph Aggregates - {request.TabType}/{request.ChartName}");
 
-                return result.Success ? result.Data! : BuildErrorJson(result.Message);
+                return result.Success ? result.Data! : JsonResponseBuilder.BuildErrorJson(result.Message);
             }
             catch (PostgresException pgEx)
             {
                 Logger.LogError(pgEx, "PostgreSQL error while fetching sales graph aggregates for OrgId: {OrgId}, Module: {Module}, Chart: {Chart}", orgId, request.TabType, request.ChartName);
-                return BuildErrorJson($"Database error: {pgEx.Message}");
+                return JsonResponseBuilder.BuildErrorJson($"Database error: {pgEx.Message}");
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Unexpected error while fetching sales graph aggregates for OrgId: {OrgId}, Module: {Module}, Chart: {Chart}", orgId, request.TabType, request.ChartName);
-                return BuildErrorJson($"Unexpected error: {ex.Message}");
+                return JsonResponseBuilder.BuildErrorJson($"Unexpected error: {ex.Message}");
             }
-        }
-
-        /// <summary>
-        /// Build error response in JSON format (matches PostgreSQL function output)
-        /// </summary>
-        private string BuildErrorJson(string message)
-        {
-            return System.Text.Json.JsonSerializer.Serialize(new
-            {
-                success = false,
-                message = message,
-                data = (object?)null
-            });
         }
 
     }

@@ -62,68 +62,21 @@ namespace xQuantum_API.Controllers.Reports
         [Produces("application/json")]
         public async Task<IActionResult> GetGraphData([FromBody] GraphFilterRequest request)
         {
-            // Quick validation - fail fast
-            if (request == null)
+            // Validation and business logic handled in service layer
+            var jsonResult = await _salesGraphService.GetSalesGraphAggregatesJsonAsync(OrgId ?? string.Empty, request);
+
+            // Check if service returned an error and return appropriate HTTP status code
+            if (jsonResult.Contains("\"success\":false") || jsonResult.Contains("\"success\": false"))
             {
-                _logger.LogWarning("GetGraphData called with null request");
-                return BadRequest(new { success = false, message = "Request body is required." });
-            }
-
-            if (request.SubId == Guid.Empty)
-            {
-                _logger.LogWarning("GetGraphData called with empty SubId");
-                return BadRequest(new { success = false, message = "SubId is required." });
-            }
-
-            if (string.IsNullOrWhiteSpace(request.ChartName))
-            {
-                _logger.LogWarning("GetGraphData called with empty LoadLevel");
-                return BadRequest(new { success = false, message = "LoadLevel is required." });
-            }
-
-            if (request.TabType==0)
-            {
-                _logger.LogWarning("GetGraphData called with empty TabType");
-                return BadRequest(new { success = false, message = "TabType is required." });
-            }
-
-            if (string.IsNullOrWhiteSpace(OrgId))
-            {
-                _logger.LogError("OrgId is missing from context");
-                return BadRequest(new { success = false, message = "OrgId is missing." });
-            }
-
-            // Validate date range
-            if (request.FromDate.HasValue && request.ToDate.HasValue && request.FromDate.Value > request.ToDate.Value)
-            {
-                return BadRequest(new { success = false, message = "FromDate cannot be greater than ToDate." });
-            }
-
-            _logger.LogInformation(
-                "Fetching sales graph aggregates for OrgId: {OrgId}, SubId: {SubId}, Module: {Module}, Level: {Level}",
-                OrgId, request.SubId, request.TabType, request.ChartName);
-
-            try
-            {
-                // Get JSON directly from database - ZERO conversion overhead!
-                var jsonResult = await _salesGraphService.GetSalesGraphAggregatesJsonAsync(OrgId, request);
-
-                // Return raw JSON with proper content type
-                // ASP.NET Core automatically sets Content-Type: application/json
-                return Content(jsonResult, "application/json");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Unexpected error in GetGraphData for OrgId: {OrgId}, SubId: {SubId}",
-                    OrgId, request.SubId);
-
-                return StatusCode(500, new
+                return new ContentResult
                 {
-                    success = false,
-                    message = $"An unexpected error occurred: {ex.Message}"
-                });
+                    Content = jsonResult,
+                    ContentType = "application/json",
+                    StatusCode = 400
+                };
             }
+
+            return Content(jsonResult, "application/json");
         }
     }
 }

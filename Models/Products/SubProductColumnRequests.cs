@@ -1,0 +1,42 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace xQuantum_API.Models.Products
+{
+    /// <summary>
+    /// Request model for creating a new SubProductColumn.
+    /// System-managed fields (CreatedBy, CreatedOn, IsActive) are set automatically.
+    /// </summary>
+    public class CreateSubProductColumnRequest
+    {
+        [Required(ErrorMessage = "SubId is required")]
+        public Guid SubId { get; set; }
+
+        [Required(ErrorMessage = "ColumnName is required")]
+        [StringLength(200, MinimumLength = 1, ErrorMessage = "ColumnName must be between 1 and 200 characters")]
+        public string ColumnName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "ProfileId is required")]
+        public Guid ProfileId { get; set; }
+    }
+
+    /// <summary>
+    /// Request model for updating an existing SubProductColumn.
+    /// System-managed fields (UpdatedBy, UpdatedOn) are set automatically.
+    /// </summary>
+    public class UpdateSubProductColumnRequest
+    {
+        [Required(ErrorMessage = "Id is required")]
+        [Range(1, int.MaxValue, ErrorMessage = "Id must be greater than 0")]
+        public int Id { get; set; }
+
+        [Required(ErrorMessage = "SubId is required")]
+        public Guid SubId { get; set; }
+
+        [Required(ErrorMessage = "ColumnName is required")]
+        [StringLength(200, MinimumLength = 1, ErrorMessage = "ColumnName must be between 1 and 200 characters")]
+        public string ColumnName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "ProfileId is required")]
+        public Guid ProfileId { get; set; }
+    }
+}

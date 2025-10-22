@@ -1,17 +1,9 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using xQuantum_API.Models.Common;
 
 namespace xQuantum_API.Models.Reports
 {
-    /// <summary>
-    /// Enum for selecting which metric to display in the heatmap
-    /// </summary>
-    public enum TabType
-    {
-        NoOfOrder = 1,
-        AvgOrder = 2,
-        GrossSales = 3
-    }
 
     /// <summary>
     /// Request model for sales heatmap data
@@ -19,7 +11,7 @@ namespace xQuantum_API.Models.Reports
     public class SalesHeatmapRequest
     {
         [Required]
-        public TabType TabType { get; set; }
+        public HeatmapTabType TabType { get; set; }
 
         [Required]
         public Guid SubId { get; set; }

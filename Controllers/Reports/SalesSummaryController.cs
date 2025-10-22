@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using xQuantum_API.Interfaces.Reports;
+using xQuantum_API.Models.Common;
 using xQuantum_API.Models.Reports;
 
 namespace xQuantum_API.Controllers.Reports
@@ -65,24 +66,21 @@ namespace xQuantum_API.Controllers.Reports
         [Produces("application/json")]
         public async Task<IActionResult> GetSummary([FromBody] SummaryFilterRequest req)
         {
-            if (req is null || req.SubId == Guid.Empty || string.IsNullOrWhiteSpace(req.TableName) || string.IsNullOrWhiteSpace(req.TableName))
-                return BadRequest(new { error = "subId, tabType and loadLevel are required" });
+            // Validation and business logic handled in service layer
+            var json = await _salesSummaryService.GetSellerSalesSummaryJsonAsync(OrgId ?? string.Empty, req);
 
-            req.Page = Math.Max(req.Page, 1);
-            req.PageSize = (req.PageSize <= 0 || req.PageSize > 1000) ? 100 : req.PageSize;
-            req.TableName = req.TableName.ToLowerInvariant();
+            // Check if service returned an error and return appropriate HTTP status code
+            if (json.Contains("\"success\":false") || json.Contains("\"success\": false"))
+            {
+                return new ContentResult
+                {
+                    Content = json,
+                    ContentType = "application/json",
+                    StatusCode = 400
+                };
+            }
 
-            try
-            {
-                var json = await _salesSummaryService.GetSellerSalesSummaryJsonAsync(OrgId ?? string.Empty, req);
-                if (string.IsNullOrWhiteSpace(json)) return NotFound(new { error = "no data" });
-                return Content(json, "application/json");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "GetSummary failed");
-                return StatusCode(500, new { error = "internal error" });
-            }
+            return Content(json, "application/json");
         }
 
         /// <summary>
@@ -125,7 +123,7 @@ namespace xQuantum_API.Controllers.Reports
             if (request.FromDate == default || request.ToDate == default)
                 return BadRequest(new { error = "FromDate and ToDate are required" });
 
-            if (!Enum.IsDefined(typeof(TabType), request.TabType))
+            if (!Enum.IsDefined(typeof(HeatmapTabType), request.TabType))
                 return BadRequest(new { error = "Invalid TabType. Must be 1 (NoOfOrder), 2 (AvgOrder), or 3 (GrossSales)" });
 
             try
