@@ -28,7 +28,6 @@ namespace xQuantum_API.Services.Reports
             if (request.SubId == Guid.Empty)
                 return BuildErrorJson("SubId is required.");
 
-            // 🔹 Dynamic function routing
             string functionName = request.TabType switch
             {
                 2 => "public.fn_amz_get_seller_sales_summary_product",
@@ -56,7 +55,7 @@ namespace xQuantum_API.Services.Reports
             );";
 
                 await using var cmd = new NpgsqlCommand(sql, conn);
-                cmd.Parameters.AddWithValue("@p_load_type", NpgsqlTypes.NpgsqlDbType.Text, request.TableName);
+                cmd.Parameters.AddWithValue("@p_load_type", NpgsqlTypes.NpgsqlDbType.Text, request.LoadTypeText);
                 cmd.Parameters.AddWithValue("@p_load_level", NpgsqlTypes.NpgsqlDbType.Text, request.TableName?.ToLower() ?? "date");
                 cmd.Parameters.AddWithValue("@p_sub_id", NpgsqlTypes.NpgsqlDbType.Uuid, request.SubId);
                 cmd.Parameters.AddWithValue("@p_from_date", NpgsqlTypes.NpgsqlDbType.Date, (object?)request.FromDate ?? DBNull.Value);
@@ -79,7 +78,6 @@ namespace xQuantum_API.Services.Reports
 
             return response.Success ? response.Data ?? BuildErrorJson("Empty data") : BuildErrorJson(response.Message);
         }
-
         public async Task<string> GetSalesHeatmapJsonAsync(string orgId, SalesHeatmapRequest request)
         {
             if (request.SubId == Guid.Empty)
