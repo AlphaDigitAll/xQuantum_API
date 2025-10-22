@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
+using OfficeOpenXml;
 using xQuantum_API.Interfaces.Products;
 using xQuantum_API.Interfaces.Tenant;
 using xQuantum_API.Models.Common;
@@ -345,6 +346,307 @@ namespace xQuantum_API.Services.Products
                     total = 0
                 }
             });
+        }
+
+        public async Task<string> BulkUpsertFromExcelAsync(string orgId, BulkUpsertFromExcelRequest request, Guid userId)
+        {
+            var startTime = DateTime.UtcNow;
+
+            try
+            {
+                // Set EPPlus license context (required for non-commercial use)
+                ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+                // Read Excel file
+                using var stream = request.ExcelFile.OpenReadStream();
+                using var package = new ExcelPackage(stream);
+                var worksheet = package.Workbook.Worksheets[0]; // Get first worksheet
+
+                if (worksheet.Dimension == null)
+                {
+                    return BuildExcelErrorJson("Excel file is empty");
+                }
+
+                var rowCount = worksheet.Dimension.End.Row;
+                var colCount = worksheet.Dimension.End.Column;
+
+                if (rowCount < 2)
+                {
+                    return BuildExcelErrorJson("Excel must have at least a header row and one data row");
+                }
+
+                // ========================================
+                // STEP 1: Extract column names from header (row 1)
+                // ========================================
+                var excludedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "product_name",
+                    "product_image",
+                    "product_asin"
+                };
+
+                var columnNames = new List<string>();
+                var columnIndexes = new List<int>(); // Track which Excel columns to process
+                int asinColumnIndex = -1;
+
+                for (int col = 1; col <= colCount; col++)
+                {
+                    var headerValue = worksheet.Cells[1, col].Text?.Trim() ?? string.Empty;
+
+                    if (string.IsNullOrWhiteSpace(headerValue))
+                        continue;
+
+                    if (headerValue.Equals("product_asin", StringComparison.OrdinalIgnoreCase))
+                    {
+                        asinColumnIndex = col;
+                    }
+                    else if (!excludedColumns.Contains(headerValue))
+                    {
+                        columnNames.Add(headerValue);
+                        columnIndexes.Add(col);
+                    }
+                }
+
+                if (asinColumnIndex == -1)
+                {
+                    return BuildExcelErrorJson("Excel must have a 'product_asin' column");
+                }
+
+                if (columnNames.Count == 0)
+                {
+                    return BuildExcelErrorJson("No valid columns found (all columns are excluded)");
+                }
+
+                // ========================================
+                // STEP 2: Extract product ASINs and values
+                // ========================================
+                var productAsins = new List<string>();
+                var columnValuesMatrix = new List<List<string>>(); // 2D list
+
+                for (int row = 2; row <= rowCount; row++)
+                {
+                    var asin = worksheet.Cells[row, asinColumnIndex].Text?.Trim() ?? string.Empty;
+
+                    if (string.IsNullOrWhiteSpace(asin))
+                        continue; // Skip rows without ASIN
+
+                    productAsins.Add(asin);
+
+                    var rowValues = new List<string>();
+                    foreach (var colIndex in columnIndexes)
+                    {
+                        var cellValue = worksheet.Cells[row, colIndex].Text?.Trim() ?? string.Empty;
+                        rowValues.Add(cellValue);
+                    }
+
+                    columnValuesMatrix.Add(rowValues);
+                }
+
+                if (productAsins.Count == 0)
+                {
+                    return BuildExcelErrorJson("No valid product ASINs found in Excel");
+                }
+
+                // ========================================
+                // STEP 3: Flatten data for PostgreSQL
+                // ========================================
+                // Convert 2D matrix to flattened 1D arrays
+                var flatProductAsins = new List<string>();
+                var flatColumnNames = new List<string>();
+                var flatValues = new List<string>();
+
+                for (int i = 0; i < productAsins.Count; i++)
+                {
+                    for (int j = 0; j < columnNames.Count; j++)
+                    {
+                        flatProductAsins.Add(productAsins[i]);
+                        flatColumnNames.Add(columnNames[j]);
+                        flatValues.Add(columnValuesMatrix[i][j]);
+                    }
+                }
+
+                // ========================================
+                // STEP 4: Call PostgreSQL function
+                // ========================================
+                var response = await ExecuteTenantOperation(orgId, async conn =>
+                {
+                    const string sql = @"
+                        SELECT fn_bulk_upsert_product_columns_from_excel(
+                            @p_sub_id,
+                            @p_profile_id,
+                            @p_created_by,
+                            @p_column_names,
+                            @p_product_asins_flat,
+                            @p_column_names_flat,
+                            @p_values,
+                            @p_org_id
+                        );";
+
+                    await using var cmd = new NpgsqlCommand(sql, conn);
+                    cmd.Parameters.AddWithValue("@p_sub_id", request.SubId);
+                    cmd.Parameters.AddWithValue("@p_profile_id", request.ProfileId);
+                    cmd.Parameters.AddWithValue("@p_created_by", userId);
+                    cmd.Parameters.AddWithValue("@p_column_names", columnNames.ToArray());
+                    cmd.Parameters.AddWithValue("@p_product_asins_flat", flatProductAsins.ToArray());
+                    cmd.Parameters.AddWithValue("@p_column_names_flat", flatColumnNames.ToArray());
+                    cmd.Parameters.AddWithValue("@p_values", flatValues.ToArray());
+                    cmd.Parameters.AddWithValue("@p_org_id", orgId ?? string.Empty);
+
+                    var result = await cmd.ExecuteScalarAsync();
+                    return result?.ToString() ?? BuildExcelErrorJson("No data returned from database");
+
+                }, $"Bulk Upsert from Excel: {productAsins.Count} products, {columnNames.Count} columns");
+
+                return response.Success
+                    ? response.Data ?? BuildExcelErrorJson("Empty data")
+                    : BuildExcelErrorJson(response.Message);
+            }
+            catch (Exception ex)
+            {
+                return BuildExcelErrorJson($"Exception: {ex.Message}");
+            }
+        }
+
+        private string BuildExcelErrorJson(string message)
+        {
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = false,
+                message = message,
+                data = new
+                {
+                    columnsProcessed = 0,
+                    valuesUpserted = 0,
+                    productsProcessed = 0,
+                    elapsedMs = 0,
+                    processedColumns = new string[] { }
+                }
+            });
+        }
+
+        public async Task<byte[]> ExportProductsToExcelAsync(string orgId, ExportProductsToExcelRequest request)
+        {
+            // Set EPPlus license context
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+            var response = await ExecuteTenantOperation(orgId, async conn =>
+            {
+                // ========================================
+                // STEP 1: Call PostgreSQL function to get data
+                // ========================================
+                const string sql = @"
+                    SELECT fn_export_products_with_columns(
+                        @p_sub_id,
+                        @p_profile_id,
+                        @p_org_id
+                    );";
+
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@p_sub_id", request.SubId);
+                cmd.Parameters.AddWithValue("@p_profile_id", request.ProfileId.HasValue ? request.ProfileId.Value : DBNull.Value);
+                cmd.Parameters.AddWithValue("@p_org_id", orgId ?? string.Empty);
+
+                var result = await cmd.ExecuteScalarAsync();
+                var jsonResult = result?.ToString() ?? string.Empty;
+
+                // Parse JSON response
+                var jsonDoc = JObject.Parse(jsonResult);
+                var success = jsonDoc["success"]?.Value<bool>() ?? false;
+
+                if (!success)
+                {
+                    throw new Exception(jsonDoc["message"]?.Value<string>() ?? "Export failed");
+                }
+
+                var data = jsonDoc["data"];
+                var columns = data?["columns"]?.ToObject<List<ColumnInfo>>() ?? new List<ColumnInfo>();
+                var products = data?["products"]?.ToObject<List<ProductExportRow>>() ?? new List<ProductExportRow>();
+
+                // ========================================
+                // STEP 2: Generate Excel file
+                // ========================================
+                using var package = new ExcelPackage();
+                var worksheet = package.Workbook.Worksheets.Add("Products");
+
+                // Header row
+                int colIndex = 1;
+                worksheet.Cells[1, colIndex++].Value = "product_asin";
+                worksheet.Cells[1, colIndex++].Value = "product_name";
+                worksheet.Cells[1, colIndex++].Value = "product_image";
+
+                // Add custom column headers (sorted alphabetically)
+                foreach (var column in columns.OrderBy(c => c.ColumnName))
+                {
+                    worksheet.Cells[1, colIndex++].Value = column.ColumnName;
+                }
+
+                // Style header row
+                using (var headerRange = worksheet.Cells[1, 1, 1, colIndex - 1])
+                {
+                    headerRange.Style.Font.Bold = true;
+                    headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                    headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+                }
+
+                // Data rows
+                int rowIndex = 2;
+                foreach (var product in products)
+                {
+                    colIndex = 1;
+                    worksheet.Cells[rowIndex, colIndex++].Value = product.Asin;
+                    worksheet.Cells[rowIndex, colIndex++].Value = product.Name;
+                    worksheet.Cells[rowIndex, colIndex++].Value = product.Image;
+
+                    // Add custom column values
+                    foreach (var column in columns.OrderBy(c => c.ColumnName))
+                    {
+                        var value = product.ColumnValues?.ContainsKey(column.ColumnName) == true
+                            ? product.ColumnValues[column.ColumnName]
+                            : string.Empty;
+                        worksheet.Cells[rowIndex, colIndex++].Value = value;
+                    }
+
+                    rowIndex++;
+                }
+
+                // Auto-fit columns
+                worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
+
+                return package.GetAsByteArray();
+
+            }, $"Export products to Excel: SubId={request.SubId}");
+
+            if (!response.Success)
+            {
+                throw new Exception(response.Message);
+            }
+
+            return response.Data ?? Array.Empty<byte>();
+        }
+
+        // Helper classes for JSON deserialization
+        private class ColumnInfo
+        {
+            [JsonProperty("id")]
+            public int Id { get; set; }
+
+            [JsonProperty("columnName")]
+            public string ColumnName { get; set; } = string.Empty;
+        }
+
+        private class ProductExportRow
+        {
+            [JsonProperty("asin")]
+            public string Asin { get; set; } = string.Empty;
+
+            [JsonProperty("name")]
+            public string Name { get; set; } = string.Empty;
+
+            [JsonProperty("image")]
+            public string Image { get; set; } = string.Empty;
+
+            [JsonProperty("columnValues")]
+            public Dictionary<string, string>? ColumnValues { get; set; }
         }
     }
 }
