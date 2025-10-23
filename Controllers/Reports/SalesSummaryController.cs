@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using xQuantum_API.Interfaces.Reports;
 using xQuantum_API.Models.Reports;
 
@@ -25,6 +26,26 @@ namespace xQuantum_API.Controllers.Reports
             _salesSummaryService = salesSummaryService ?? throw new ArgumentNullException(nameof(salesSummaryService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
+        [HttpPost("cards")]
+        public async Task<IActionResult> GetSalesSummaryCards([FromBody] SummaryCardRequest request)
+        {
+            if (request?.SubId == Guid.Empty)
+                return BadRequest(new { error = "SubId is required." });
+
+            if (request?.FromDate == null || request?.ToDate == null)
+                return BadRequest(new { error = "FromDate and ToDate are required." });
+
+            try
+            {
+                var json = await _salesSummaryService.GetSalesSummaryCardsJsonAsync(OrgId ?? string.Empty, request);
+                return Content(json, "application/json");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Unexpected server error", details = ex.Message });
+            }
+        }
+
 
         /// <summary>
         /// ULTRA-FAST endpoint - Returns JSON directly from PostgreSQL

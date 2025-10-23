@@ -22,6 +22,54 @@ namespace xQuantum_API.Services.Reports
             : base(connectionManager, tenantService, logger)
         {
         }
+        public async Task<string> GetSalesSummaryCardsJsonAsync(string orgId, SummaryCardRequest request)
+        {
+            if (request.SubId == Guid.Empty)
+                return BuildErrorJson("SubId is required.");
+            if (request.FromDate == null || request.ToDate == null)
+                return BuildErrorJson("FromDate and ToDate are required.");
+
+            try
+            {
+
+                var result = await ExecuteTenantOperation(orgId, async conn =>
+                {
+                    var sql = $@"
+                SELECT fn_amz_get_seller_sales_summary_cards(
+                    @p_sub_id,
+                    @p_from_date,
+                    @p_to_date
+                );";
+
+                    await using var cmd = new NpgsqlCommand(sql, conn);
+                    cmd.Parameters.AddWithValue("@p_sub_id", NpgsqlTypes.NpgsqlDbType.Uuid, request.SubId);
+                    cmd.Parameters.AddWithValue("@p_from_date", NpgsqlTypes.NpgsqlDbType.Date, (object?)request.FromDate ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@p_to_date", NpgsqlTypes.NpgsqlDbType.Date, (object?)request.ToDate ?? DBNull.Value);
+                    var jsonResult = await cmd.ExecuteScalarAsync();
+
+                    if (jsonResult == null || jsonResult == DBNull.Value)
+                        return BuildErrorJson("No data returned from database.");
+
+                    return jsonResult.ToString() ?? BuildErrorJson("Failed to retrieve data.");
+                }, $"Get Sales Summary Cards - {request.SubId}");
+
+                return result.Success ? result.Data! : BuildErrorJson(result.Message);
+            }
+            catch (PostgresException pgEx)
+            {
+                Logger.LogError(pgEx,
+                    "PostgreSQL error while fetching sales summary cards for OrgId: {OrgId}, SubId: {SubId}",
+                    orgId, request.SubId);
+                return BuildErrorJson($"Database error: {pgEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex,
+                    "Unexpected error while fetching sales summary cards for OrgId: {OrgId}, SubId: {SubId}",
+                    orgId, request.SubId);
+                return BuildErrorJson($"Unexpected error: {ex.Message}");
+            }
+        }
 
         public async Task<string> GetSellerSalesSummaryJsonAsync(string orgId, SummaryFilterRequest request)
         {
@@ -33,8 +81,8 @@ namespace xQuantum_API.Services.Reports
                 2 => "public.fn_amz_get_seller_sales_summary_product",
                 3 => "public.fn_amz_get_seller_sales_summary_demographic",
                 4 => "public.fn_amz_get_seller_sales_summary_shipping",
-                5=> "public.fn_amz_get_seller_sales_summary_promotion",
-                _ => "public.fn_amz_get_seller_sales_summary_date_and_time" 
+                5 => "public.fn_amz_get_seller_sales_summary_promotion",
+                _ => "public.fn_amz_get_seller_sales_summary_date_and_time"
             };
 
             var response = await ExecuteTenantOperation(orgId, async conn =>

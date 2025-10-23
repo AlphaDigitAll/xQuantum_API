@@ -8,6 +8,7 @@ namespace xQuantum_API.Interfaces.Reports
     /// </summary>
     public interface ISalesSummaryService
     {
+        public Task<string> GetSalesSummaryCardsJsonAsync(string orgId, SummaryCardRequest request);
         /// <summary>
         /// Retrieves sales summary data as raw JSON from PostgreSQL
         /// Zero C# conversion overhead - database does all formatting
