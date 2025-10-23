@@ -31,4 +31,34 @@ namespace xQuantum_API.Models.Reports
                 _ => "order"
             };
     }
+    public class SummaryCardRequest
+    {
+        public Guid SubId { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+
+    }
+
+
+    public class GraphFilterRequest
+    {
+        public Guid SubId { get; set; }
+
+        public string ChartName { get; set; } = string.Empty;
+        public int TabTypes { get; set; }
+        public Dictionary<string, string>? Filters { get; set; } = new();
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+
+        public string LoadTypeText =>
+            TabTypes switch
+            {
+                (int)SummaryTabType.DateAndTime => "dateandtime",
+                (int)SummaryTabType.Product => "product",
+                (int)SummaryTabType.Demographic => "demographic",
+                (int)SummaryTabType.Shipping => "shipping",
+                (int)SummaryTabType.Promotion => "promotion",
+                _ => "order"
+            };
+    }
 }
