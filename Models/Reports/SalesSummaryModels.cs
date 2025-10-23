@@ -31,4 +31,11 @@ namespace xQuantum_API.Models.Reports
                 _ => "order"
             };
     }
+    public class SummaryCardRequest
+    {
+        public Guid SubId { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+
+    }
 }

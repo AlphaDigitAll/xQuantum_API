@@ -503,20 +503,16 @@ namespace xQuantum_API.Services.Products
 
         public async Task<byte[]> ExportProductsToExcelAsync(string orgId, ExportProductsToExcelRequest request)
         {
-            // Set EPPlus license context
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
             var response = await ExecuteTenantOperation(orgId, async conn =>
             {
-                // ========================================
-                // STEP 1: Call PostgreSQL function to get data
-                // ========================================
                 const string sql = @"
-                    SELECT fn_export_products_with_columns(
-                        @p_sub_id,
-                        @p_profile_id,
-                        @p_org_id
-                    );";
+            SELECT fn_export_products_with_columns(
+                @p_sub_id,
+                @p_profile_id,
+                @p_org_id
+            );";
 
                 await using var cmd = new NpgsqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@p_sub_id", request.SubId);
@@ -526,77 +522,52 @@ namespace xQuantum_API.Services.Products
                 var result = await cmd.ExecuteScalarAsync();
                 var jsonResult = result?.ToString() ?? string.Empty;
 
-                // Parse JSON response
                 var jsonDoc = JObject.Parse(jsonResult);
-                var success = jsonDoc["success"]?.Value<bool>() ?? false;
-
-                if (!success)
-                {
+                if (!(jsonDoc["success"]?.Value<bool>() ?? false))
                     throw new Exception(jsonDoc["message"]?.Value<string>() ?? "Export failed");
-                }
 
-                var data = jsonDoc["data"];
-                var columns = data?["columns"]?.ToObject<List<ColumnInfo>>() ?? new List<ColumnInfo>();
-                var products = data?["products"]?.ToObject<List<ProductExportRow>>() ?? new List<ProductExportRow>();
+                var dataArray = jsonDoc["data"] as JArray;
+                if (dataArray == null || dataArray.Count == 0)
+                    throw new Exception("No products found to export.");
 
-                // ========================================
-                // STEP 2: Generate Excel file
-                // ========================================
+                var firstObj = (JObject)dataArray.First;
+                var allColumns = firstObj.Properties().Select(p => p.Name).ToList();
+
                 using var package = new ExcelPackage();
                 var worksheet = package.Workbook.Worksheets.Add("Products");
 
-                // Header row
-                int colIndex = 1;
-                worksheet.Cells[1, colIndex++].Value = "product_asin";
-                worksheet.Cells[1, colIndex++].Value = "product_name";
-                worksheet.Cells[1, colIndex++].Value = "product_image";
-
-                // Add custom column headers (sorted alphabetically)
-                foreach (var column in columns.OrderBy(c => c.ColumnName))
+                for (int i = 0; i < allColumns.Count; i++)
                 {
-                    worksheet.Cells[1, colIndex++].Value = column.ColumnName;
+                    worksheet.Cells[1, i + 1].Value = allColumns[i];
                 }
 
-                // Style header row
-                using (var headerRange = worksheet.Cells[1, 1, 1, colIndex - 1])
+                using (var headerRange = worksheet.Cells[1, 1, 1, allColumns.Count])
                 {
                     headerRange.Style.Font.Bold = true;
                     headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
-                    headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+                    headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightSteelBlue);
+                    headerRange.Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Center;
                 }
 
-                // Data rows
-                int rowIndex = 2;
-                foreach (var product in products)
+                int row = 2;
+                foreach (var product in dataArray)
                 {
-                    colIndex = 1;
-                    worksheet.Cells[rowIndex, colIndex++].Value = product.Asin;
-                    worksheet.Cells[rowIndex, colIndex++].Value = product.Name;
-                    worksheet.Cells[rowIndex, colIndex++].Value = product.Image;
-
-                    // Add custom column values
-                    foreach (var column in columns.OrderBy(c => c.ColumnName))
+                    for (int col = 0; col < allColumns.Count; col++)
                     {
-                        var value = product.ColumnValues?.ContainsKey(column.ColumnName) == true
-                            ? product.ColumnValues[column.ColumnName]
-                            : string.Empty;
-                        worksheet.Cells[rowIndex, colIndex++].Value = value;
+                        worksheet.Cells[row, col + 1].Value = product[allColumns[col]]?.ToString() ?? string.Empty;
                     }
-
-                    rowIndex++;
+                    row++;
                 }
 
-                // Auto-fit columns
                 worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
+                worksheet.View.FreezePanes(2, 1);
 
                 return package.GetAsByteArray();
 
             }, $"Export products to Excel: SubId={request.SubId}");
 
             if (!response.Success)
-            {
                 throw new Exception(response.Message);
-            }
 
             return response.Data ?? Array.Empty<byte>();
         }
