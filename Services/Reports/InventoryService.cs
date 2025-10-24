@@ -111,7 +111,7 @@ namespace xQuantum_API.Services.Reports
                 await using var reader = await cmd.ExecuteReaderAsync();
 
                 var items = new List<Dictionary<string, object>>();
-                Dictionary<string, object> footer = null;
+                Dictionary<string, object> footer = null!;
                 long totalCount = 0;
 
                 while (await reader.ReadAsync())
