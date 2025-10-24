@@ -581,17 +581,20 @@ namespace xQuantum_API.Services.Products
         {
             try
             {
-                var connString = await GetConnectionStringAsync(orgId);
-                await using var conn = new NpgsqlConnection(connString);
-                await conn.OpenAsync();
+                var result = await ExecuteTenantOperation(orgId, async conn =>
+                {
+                    const string sql = "SELECT fn_get_blacklist_data(@sub_id);";
+                    await using var cmd = new NpgsqlCommand(sql, conn);
+                    cmd.Parameters.AddWithValue("@sub_id", subId);
 
-                const string sql = "SELECT fn_get_blacklist_data(@sub_id)";
+                    var res = await cmd.ExecuteScalarAsync();
+                    return res?.ToString() ?? JsonResponseBuilder.BuildErrorJson("No data returned");
+                },
+                $"Get Blacklist Data - SubId: {subId}");
 
-                await using var cmd = new NpgsqlCommand(sql, conn);
-                cmd.Parameters.AddWithValue("@sub_id", subId);
-
-                var result = await cmd.ExecuteScalarAsync();
-                return result?.ToString() ?? JsonResponseBuilder.BuildErrorJson("No data returned");
+                return result.Success
+                    ? result.Data ?? JsonResponseBuilder.BuildErrorJson("Empty response")
+                    : JsonResponseBuilder.BuildErrorJson(result.Message);
             }
             catch (Exception ex)
             {
@@ -610,14 +613,16 @@ namespace xQuantum_API.Services.Products
             try
             {
                 if (items == null || items.Count == 0)
-                    return JsonResponseBuilder.BuildErrorJson("No items provided");
+                    return JsonResponseBuilder.BuildErrorJson("No items provided.");
 
                 if (items.Count > 10000)
-                    return JsonResponseBuilder.BuildErrorJson("Maximum 10,000 items allowed per request");
+                    return JsonResponseBuilder.BuildErrorJson("Maximum 10,000 items allowed per request.");
 
-                // Validate column_key values (must be "negative_exact" or "negative_phrase")
                 var validKeys = new HashSet<string> { "negative_exact", "negative_phrase" };
-                var invalidItems = items.Where(i => !validKeys.Contains(i.ColumnKey.ToLower())).ToList();
+                var invalidItems = items
+                    .Where(i => string.IsNullOrWhiteSpace(i.ColumnKey) || !validKeys.Contains(i.ColumnKey.ToLower()))
+                    .ToList();
+
                 if (invalidItems.Any())
                 {
                     return JsonResponseBuilder.BuildErrorJson(
@@ -625,101 +630,101 @@ namespace xQuantum_API.Services.Products
                     );
                 }
 
-                var connString = await GetConnectionStringAsync(orgId);
-                await using var conn = new NpgsqlConnection(connString);
-                await conn.OpenAsync();
-
-                // Group items by (sub_id, asin) to handle multiple column updates for same product
-                var grouped = items.GroupBy(i => new { i.SubId, i.Asin }).ToList();
-
-                var sql = @"
-                    WITH updates AS (
-                        SELECT
-                            u.sub_id,
-                            u.asin,
-                            u.column_key,
-                            u.column_value
-                        FROM UNNEST(
-                            @sub_ids::uuid[],
-                            @asins::varchar[],
-                            @column_keys::varchar[],
-                            @column_values::text[]
-                        ) AS u(sub_id, asin, column_key, column_value)
-                    ),
-                    aggregated AS (
-                        SELECT
-                            sub_id,
-                            asin,
-                            MAX(CASE WHEN column_key = 'negative_exact' THEN column_value ELSE NULL END) AS negative_exact,
-                            MAX(CASE WHEN column_key = 'negative_phrase' THEN column_value ELSE NULL END) AS negative_phrase
-                        FROM updates
-                        GROUP BY sub_id, asin
-                    ),
-                    upserted AS (
-                        INSERT INTO tbl_amz_product_blacklist_keywords
-                            (sub_id, asin, negative_exact, negative_phrase, is_active, created_by, created_on, updated_by, updated_on)
-                        SELECT
-                            a.sub_id,
-                            a.asin,
-                            COALESCE(a.negative_exact, ''),
-                            COALESCE(a.negative_phrase, ''),
-                            true,
-                            @user_id,
-                            NOW(),
-                            @user_id,
-                            NOW()
-                        FROM aggregated a
-                        ON CONFLICT (sub_id, asin)
-                        DO UPDATE SET
-                            negative_exact = CASE
-                                WHEN EXCLUDED.negative_exact IS NOT NULL AND EXCLUDED.negative_exact <> ''
-                                THEN EXCLUDED.negative_exact
-                                ELSE tbl_amz_product_blacklist_keywords.negative_exact
-                            END,
-                            negative_phrase = CASE
-                                WHEN EXCLUDED.negative_phrase IS NOT NULL AND EXCLUDED.negative_phrase <> ''
-                                THEN EXCLUDED.negative_phrase
-                                ELSE tbl_amz_product_blacklist_keywords.negative_phrase
-                            END,
-                            updated_by = @user_id,
-                            updated_on = NOW(),
-                            is_active = true
-                        RETURNING
-                            CASE WHEN xmax = 0 THEN 1 ELSE 0 END AS inserted,
-                            CASE WHEN xmax > 0 THEN 1 ELSE 0 END AS updated
+                var result = await ExecuteTenantOperation(orgId, async conn =>
+                {
+                    const string sql = @"
+                WITH updates AS (
+                    SELECT
+                        u.sub_id,
+                        u.asin,
+                        u.column_key,
+                        u.column_value
+                    FROM UNNEST(
+                        @sub_ids::uuid[],
+                        @asins::varchar[],
+                        @column_keys::varchar[],
+                        @column_values::text[]
+                    ) AS u(sub_id, asin, column_key, column_value)
+                ),
+                aggregated AS (
+                    SELECT
+                        sub_id,
+                        asin,
+                        MAX(CASE WHEN column_key = 'negative_exact' THEN column_value END) AS negative_exact,
+                        MAX(CASE WHEN column_key = 'negative_phrase' THEN column_value END) AS negative_phrase
+                    FROM updates
+                    GROUP BY sub_id, asin
+                ),
+                upserted AS (
+                    INSERT INTO tbl_amz_product_blacklist_keywords
+                        (sub_id, asin, negative_exact, negative_phrase, is_active, created_by, created_on, updated_by, updated_on)
+                    SELECT
+                        a.sub_id,
+                        a.asin,
+                        COALESCE(a.negative_exact, ''),
+                        COALESCE(a.negative_phrase, ''),
+                        TRUE,
+                        @user_id,
+                        NOW(),
+                        @user_id,
+                        NOW()
+                    FROM aggregated a
+                    ON CONFLICT (sub_id, asin)
+                    DO UPDATE SET
+                        negative_exact = CASE
+                            WHEN EXCLUDED.negative_exact IS NOT NULL AND EXCLUDED.negative_exact <> ''
+                            THEN EXCLUDED.negative_exact
+                            ELSE tbl_amz_product_blacklist_keywords.negative_exact
+                        END,
+                        negative_phrase = CASE
+                            WHEN EXCLUDED.negative_phrase IS NOT NULL AND EXCLUDED.negative_phrase <> ''
+                            THEN EXCLUDED.negative_phrase
+                            ELSE tbl_amz_product_blacklist_keywords.negative_phrase
+                        END,
+                        updated_by = @user_id,
+                        updated_on = NOW(),
+                        is_active = TRUE
+                    RETURNING
+                        CASE WHEN xmax = 0 THEN 1 ELSE 0 END AS inserted,
+                        CASE WHEN xmax > 0 THEN 1 ELSE 0 END AS updated
+                )
+                SELECT jsonb_build_object(
+                    'success', TRUE,
+                    'message', 'Processed ' || COUNT(*) || ' records: ' || SUM(inserted) || ' inserted, ' || SUM(updated) || ' updated',
+                    'data', jsonb_build_object(
+                        'inserted', SUM(inserted),
+                        'updated', SUM(updated),
+                        'total', COUNT(*)
                     )
-                    SELECT jsonb_build_object(
-                        'success', true,
-                        'message', 'Processed ' || COUNT(*) || ' records: ' || SUM(inserted) || ' inserted, ' || SUM(updated) || ' updated',
-                        'data', jsonb_build_object(
-                            'inserted', SUM(inserted),
-                            'updated', SUM(updated),
-                            'total', COUNT(*)
-                        )
-                    )
-                    FROM upserted;";
+                )
+                FROM upserted;";
 
-                await using var cmd = new NpgsqlCommand(sql, conn);
+                    await using var cmd = new NpgsqlCommand(sql, conn);
 
-                // Prepare arrays for UNNEST
-                var subIds = items.Select(i => i.SubId).ToArray();
-                var asins = items.Select(i => i.Asin).ToArray();
-                var columnKeys = items.Select(i => i.ColumnKey.ToLower()).ToArray();
-                var columnValues = items.Select(i => i.ColumnValue ?? string.Empty).ToArray();
+                    var subIds = items.Select(i => i.SubId).ToArray();
+                    var asins = items.Select(i => i.Asin).ToArray();
+                    var columnKeys = items.Select(i => i.ColumnKey.ToLower()).ToArray();
+                    var columnValues = items.Select(i => i.ColumnValue ?? string.Empty).ToArray();
 
-                cmd.Parameters.AddWithValue("@sub_ids", subIds);
-                cmd.Parameters.AddWithValue("@asins", asins);
-                cmd.Parameters.AddWithValue("@column_keys", columnKeys);
-                cmd.Parameters.AddWithValue("@column_values", columnValues);
-                cmd.Parameters.AddWithValue("@user_id", userId);
+                    cmd.Parameters.AddWithValue("@sub_ids", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Uuid, subIds);
+                    cmd.Parameters.AddWithValue("@asins", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Varchar, asins);
+                    cmd.Parameters.AddWithValue("@column_keys", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Varchar, columnKeys);
+                    cmd.Parameters.AddWithValue("@column_values", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Text, columnValues);
+                    cmd.Parameters.AddWithValue("@user_id", NpgsqlTypes.NpgsqlDbType.Uuid, userId);
 
-                var result = await cmd.ExecuteScalarAsync();
-                return result?.ToString() ?? JsonResponseBuilder.BuildErrorJson("No data returned");
+                    var dbResult = await cmd.ExecuteScalarAsync();
+                    return dbResult?.ToString() ?? JsonResponseBuilder.BuildErrorJson("No data returned.");
+                },
+                $"Bulk Update Blacklist Values - {items.Count} items");
+
+                return result.Success
+                    ? result.Data ?? JsonResponseBuilder.BuildErrorJson("Empty response from database.")
+                    : JsonResponseBuilder.BuildErrorJson(result.Message);
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "BulkUpdateBlacklistValuesAsync failed for {Count} items", items.Count);
-                return JsonResponseBuilder.BuildErrorJson($"Database error: {ex.Message}");
+                Logger.LogError(ex, "BulkUpdateBlacklistValuesAsync failed for {Count} items", items?.Count ?? 0);
+                return JsonResponseBuilder.BuildErrorJson($"Unexpected error: {ex.Message}");
             }
         }
 
