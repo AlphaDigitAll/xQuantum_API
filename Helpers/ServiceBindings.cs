@@ -34,6 +34,7 @@ namespace xQuantum_API.Helpers
             services.AddScoped<ISalesGraphService, SalesGraphService>();
             services.AddScoped<ISubProductColumnService, SubProductColumnService>();
             services.AddScoped<ISellerSubscriptionService, SellerSubscriptionService>();
+            services.AddScoped<IProductCogsService, ProductCogsService>();
             // Add these lines in your service registration
             services.AddHttpContextAccessor(); // ← Required!
 
