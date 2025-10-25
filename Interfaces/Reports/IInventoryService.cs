@@ -5,7 +5,8 @@ namespace xQuantum_API.Interfaces.Reports
 {
     public interface IInventoryService
     {
-        Task<ApiResponse<PaginatedResponseWithFooter<Dictionary<string, object>>>> GetInventoryAsync(string orgId, InventoryQueryRequest req);
+        public Task<string> GetInventoryJsonAsync(string orgId, InventoryQueryRequest request);
+        public Task<string> GetInventorySalesJsonAsync(string orgId, InventoryQueryRequest request);
         Task<ApiResponse<InventoryCardSummary>> GetInventoryCardAsync(string connectionString, Guid subId);
 
     }
