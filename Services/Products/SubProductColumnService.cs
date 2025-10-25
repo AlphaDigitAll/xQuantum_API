@@ -603,6 +603,61 @@ namespace xQuantum_API.Services.Products
         }
 
         /// <summary>
+        /// Get blacklist keywords with pagination, sorting, and global search
+        /// Ultra-fast paginated query - optimized for large datasets
+        /// Zero C# conversion overhead - returns raw JSON from database
+        /// </summary>
+        public async Task<string> GetBlacklistDataV2Async(string orgId, GetBlacklistDataRequest request)
+        {
+            try
+            {
+                // Validate request
+                if (request == null)
+                    return JsonResponseBuilder.BuildErrorJson("Request cannot be null");
+
+                if (request.SubId == Guid.Empty)
+                    return JsonResponseBuilder.BuildErrorJson("SubId is required");
+
+                // Normalize and validate inputs
+                request.Page = Math.Max(request.Page, 1);
+                request.PageSize = Math.Max(Math.Min(request.PageSize, 1000), 1);
+                request.SortField = string.IsNullOrWhiteSpace(request.SortField) ? "product_title" : request.SortField.Trim();
+                request.SortOrder = request.SortOrder == 1 ? 1 : 0;
+                request.GlobalSearch = request.GlobalSearch?.Trim() ?? string.Empty;
+
+                Logger.LogInformation(
+                    "GetBlacklistDataV2 - SubId: {SubId}, Page: {Page}, PageSize: {PageSize}, SortField: {SortField}, SortOrder: {SortOrder}, Search: '{Search}'",
+                    request.SubId, request.Page, request.PageSize, request.SortField, request.SortOrder, request.GlobalSearch
+                );
+
+                var result = await ExecuteTenantOperation(orgId, async conn =>
+                {
+                    const string sql = "SELECT fn_get_blacklist_data_v2(@sub_id, @page, @page_size, @sort_field, @sort_order, @global_search);";
+                    await using var cmd = new NpgsqlCommand(sql, conn);
+                    cmd.Parameters.AddWithValue("@sub_id", request.SubId);
+                    cmd.Parameters.AddWithValue("@page", request.Page);
+                    cmd.Parameters.AddWithValue("@page_size", request.PageSize);
+                    cmd.Parameters.AddWithValue("@sort_field", request.SortField);
+                    cmd.Parameters.AddWithValue("@sort_order", request.SortOrder);
+                    cmd.Parameters.AddWithValue("@global_search", request.GlobalSearch);
+
+                    var res = await cmd.ExecuteScalarAsync();
+                    return res?.ToString() ?? JsonResponseBuilder.BuildErrorJson("No data returned");
+                },
+                $"Get Blacklist Data V2 - SubId: {request.SubId}");
+
+                return result.Success
+                    ? result.Data ?? JsonResponseBuilder.BuildErrorJson("Empty response")
+                    : JsonResponseBuilder.BuildErrorJson(result.Message);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "GetBlacklistDataV2Async failed for SubId: {SubId}", request?.SubId);
+                return JsonResponseBuilder.BuildErrorJson($"Database error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Bulk update blacklist keyword values (negative_exact, negative_phrase)
         /// Ultra-fast UPSERT using PostgreSQL UNNEST - processes 100+ records in <50ms
         /// Supports dynamic column updates: "negative_exact" or "negative_phrase"
@@ -684,8 +739,8 @@ namespace xQuantum_API.Services.Products
                         updated_on = NOW(),
                         is_active = TRUE
                     RETURNING
-                        CASE WHEN xmax = 0 THEN 1 ELSE 0 END AS inserted,
-                        CASE WHEN xmax > 0 THEN 1 ELSE 0 END AS updated
+                        CASE WHEN xmax::text::bigint = 0 THEN 1 ELSE 0 END AS inserted,
+                        CASE WHEN xmax::text::bigint > 0 THEN 1 ELSE 0 END AS updated
                 )
                 SELECT jsonb_build_object(
                     'success', TRUE,
