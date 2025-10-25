@@ -42,6 +42,13 @@ namespace xQuantum_API.Interfaces.Products
         Task<string> GetBlacklistDataAsync(string orgId, Guid subId);
 
         /// <summary>
+        /// Get blacklist keywords with pagination, sorting, and global search
+        /// Ultra-fast paginated query - optimized for large datasets
+        /// Supports filtering, sorting, and searching across all fields
+        /// </summary>
+        Task<string> GetBlacklistDataV2Async(string orgId, GetBlacklistDataRequest request);
+
+        /// <summary>
         /// Bulk update blacklist keyword values (negative_exact, negative_phrase)
         /// Ultra-fast UPSERT - can process 100+ records in <50ms
         /// Uses PostgreSQL UNNEST and ON CONFLICT for maximum performance

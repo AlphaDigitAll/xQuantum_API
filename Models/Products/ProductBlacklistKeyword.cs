@@ -42,6 +42,42 @@ namespace xQuantum_API.Models.Products
     }
 
     /// <summary>
+    /// Request model for GetBlacklistData endpoint with pagination, sorting, and search
+    /// </summary>
+    public class GetBlacklistDataRequest
+    {
+        [Required]
+        public Guid SubId { get; set; }
+
+        /// <summary>
+        /// Page number (default: 1, minimum: 1)
+        /// </summary>
+        public int Page { get; set; } = 1;
+
+        /// <summary>
+        /// Records per page (default: 100, minimum: 1, maximum: 1000)
+        /// </summary>
+        public int PageSize { get; set; } = 100;
+
+        /// <summary>
+        /// Sort field (id, product_title, a_s_i_n, asin, negative_exact, negative_phrase)
+        /// Default: product_title
+        /// </summary>
+        public string SortField { get; set; } = "product_title";
+
+        /// <summary>
+        /// Sort order: 0=ASC, 1=DESC
+        /// Default: 0 (ASC)
+        /// </summary>
+        public int SortOrder { get; set; } = 0;
+
+        /// <summary>
+        /// Global search across product_title, a_s_i_n, negative_exact, negative_phrase
+        /// </summary>
+        public string GlobalSearch { get; set; } = string.Empty;
+    }
+
+    /// <summary>
     /// Response model for GetBlacklistData endpoint
     /// Includes product details from tbl_amz_products
     /// </summary>
