@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using Npgsql;
+using xQuantum_API.Helpers;
 using xQuantum_API.Interfaces.Reports;
 using xQuantum_API.Interfaces.Tenant;
 using xQuantum_API.Models.Common;
@@ -86,121 +87,93 @@ namespace xQuantum_API.Services.Reports
                 };
             }
         }
-        public async Task<ApiResponse<PaginatedResponseWithFooter<Dictionary<string, object>>>> GetInventoryAsync(string orgId, InventoryQueryRequest req)
+        public async Task<string> GetInventoryJsonAsync(string orgId, InventoryQueryRequest request)
         {
-            return await ExecuteTenantOperation(orgId, async conn =>
+            if (request.Page <= 0) return JsonResponseBuilder.BuildErrorJson("Page must be greater than 0.");
+            if (request.PageSize <= 0) return JsonResponseBuilder.BuildErrorJson("PageSize must be greater than 0.");
+            if (string.IsNullOrEmpty(request.TabType)) return JsonResponseBuilder.BuildErrorJson("TabType is required.");
+
+            try
             {
-                var paginatedResponse = new PaginatedResponseWithFooter<Dictionary<string, object>>
+                var result = await ExecuteTenantOperation(orgId, async conn =>
                 {
-                    Page = req.Page,
-                    PageSize = req.PageSize
-                };
+                    var sql = @"SELECT public.fn_amz_get_inventory(
+                            @p_page, @p_page_size, @p_sort_field, @p_sort_order,
+                            @p_global_search, @p_tab_type, @p_filters);";
 
-                var sql = "SELECT * FROM public.fn_get_inventory(@page, @pageSize, @sortField, @sortOrder, @globalSearch, @filters::jsonb)";
+                    await using var cmd = new NpgsqlCommand(sql, conn);
+                    cmd.Parameters.AddWithValue("@p_page", NpgsqlTypes.NpgsqlDbType.Integer, request.Page);
+                    cmd.Parameters.AddWithValue("@p_page_size", NpgsqlTypes.NpgsqlDbType.Integer, request.PageSize);
+                    cmd.Parameters.AddWithValue("@p_sort_field", NpgsqlTypes.NpgsqlDbType.Text, (object?)request.SortField ?? "asin");
+                    cmd.Parameters.AddWithValue("@p_sort_order", NpgsqlTypes.NpgsqlDbType.Integer, request.SortOrder);
+                    cmd.Parameters.AddWithValue("@p_global_search", NpgsqlTypes.NpgsqlDbType.Text, (object?)request.GlobalSearch ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@p_tab_type", NpgsqlTypes.NpgsqlDbType.Text, (object?)request.TabType ?? "product");
+                    var filtersJson = request.Filters != null && request.Filters.Any()? System.Text.Json.JsonSerializer.Serialize(request.Filters): "{}";
+                    cmd.Parameters.AddWithValue("@p_filters", NpgsqlTypes.NpgsqlDbType.Jsonb, filtersJson);
 
-                await using var cmd = new NpgsqlCommand(sql, conn);
-                cmd.Parameters.AddWithValue("@page", req.Page);
-                cmd.Parameters.AddWithValue("@pageSize", req.PageSize);
-                cmd.Parameters.AddWithValue("@sortField", string.IsNullOrWhiteSpace(req.SortField) ? "id" : req.SortField);
-                cmd.Parameters.AddWithValue("@sortOrder", req.SortOrder == 0 ? 1 : req.SortOrder);
-                cmd.Parameters.AddWithValue("@globalSearch", (object?)req.GlobalSearch ?? DBNull.Value);
+                    var jsonResult = await cmd.ExecuteScalarAsync();
+                    if (jsonResult == null || jsonResult == DBNull.Value)
+                        return JsonResponseBuilder.BuildErrorJson("No data returned from fn_get_inventory.");
 
-                var filtersJson = JsonConvert.SerializeObject(req.Filters ?? new Dictionary<string, object>());
-                cmd.Parameters.AddWithValue("@filters", filtersJson);
+                    return jsonResult.ToString() ?? JsonResponseBuilder.BuildErrorJson("Empty JSON response.");
+                }, $"Get Inventory - {request.TabType}");
 
-                await using var reader = await cmd.ExecuteReaderAsync();
-
-                var items = new List<Dictionary<string, object>>();
-                Dictionary<string, object> footer = null!;
-                long totalCount = 0;
-
-                while (await reader.ReadAsync())
-                {
-                    var resultType = reader.GetString(reader.GetOrdinal("result_type"));
-
-                    if (resultType == "record")
-                    {
-                        // This is a regular record
-                        var dict = new Dictionary<string, object>();
-
-                        for (int i = 0; i < reader.FieldCount; i++)
-                        {
-                            var columnName = reader.GetName(i);
-
-                            // Skip result_type and NULL footer columns
-                            if (columnName == "result_type" ||
-                                (columnName == "working_quantity" && reader.IsDBNull(i)) ||
-                                (columnName == "total_fulfillable_quantity" && reader.IsDBNull(i)) ||
-                                (columnName == "shipped_quantity" && reader.IsDBNull(i)) ||
-                                (columnName == "receiving_quantity" && reader.IsDBNull(i)) ||
-                                (columnName == "customer_order_quantity" && reader.IsDBNull(i)) ||
-                                (columnName == "transshipment_quantity" && reader.IsDBNull(i)) ||
-                                (columnName == "fc_processing_quantity_total" && reader.IsDBNull(i)) ||
-                                (columnName == "total_reserved_quantity_sum" && reader.IsDBNull(i)) ||
-                                (columnName == "customer_damaged_quantity_total" && reader.IsDBNull(i)) ||
-                                (columnName == "warehouse_damaged_quantity_total" && reader.IsDBNull(i)) ||
-                                (columnName == "distributor_damaged_quantity_total" && reader.IsDBNull(i)) ||
-                                (columnName == "carrier_damaged_quantity_total" && reader.IsDBNull(i)) ||
-                                (columnName == "defective_quantity_total" && reader.IsDBNull(i)) ||
-                                (columnName == "expired_quantity_total" && reader.IsDBNull(i)) ||
-                                (columnName == "total_unfulfillable_quantity" && reader.IsDBNull(i)) ||
-                                (columnName == "total_quantity_sum" && reader.IsDBNull(i)))
-                            {
-                                continue;
-                            }
-
-                            dict[columnName] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-                        }
-
-                        // Get total count
-                        if (dict.ContainsKey("total_count") && dict["total_count"] != null)
-                        {
-                            totalCount = Convert.ToInt64(dict["total_count"]);
-                        }
-
-                        items.Add(dict);
-                    }
-                    else if (resultType == "footer")
-                    {
-                        // This is the footer row
-                        footer = new Dictionary<string, object>
-                {
-                    { "sr_no", 0 },
-                    { "image", null },
-                    { "asin", null },
-                    { "fnSku", null },
-                    { "productName", null },
-                    { "working_quantity", GetLongValue(reader, "working_quantity") },
-                    { "total_fulfillable_quantity", GetLongValue(reader, "total_fulfillable_quantity") },
-                    { "total_unfulfillable_quantity", GetLongValue(reader, "total_unfulfillable_quantity") },
-                    { "shipped_quantity", GetLongValue(reader, "shipped_quantity") },
-                    { "receiving_quantity", GetLongValue(reader, "receiving_quantity") },
-                    { "customer_order_quantity", GetLongValue(reader, "customer_order_quantity") },
-                    { "transshipment_quantity", GetLongValue(reader, "transshipment_quantity") },
-                    { "fc_processing_quantity", GetLongValue(reader, "fc_processing_quantity_total") },
-                    { "total_reserved_quantity", GetLongValue(reader, "total_reserved_quantity_sum") },
-                    { "customer_damaged_quantity", GetLongValue(reader, "customer_damaged_quantity_total") },
-                    { "warehouse_damaged_quantity", GetLongValue(reader, "warehouse_damaged_quantity_total") },
-                    { "distributor_damaged_quantity", GetLongValue(reader, "distributor_damaged_quantity_total") },
-                    { "carrier_damaged_quantity", GetLongValue(reader, "carrier_damaged_quantity_total") },
-                    { "defective_quantity", GetLongValue(reader, "defective_quantity_total") },
-                    { "expired_quantity", GetLongValue(reader, "expired_quantity_total") },
-                    { "total_quantity", GetLongValue(reader, "total_quantity_sum") }
-                };
-                    }
-                }
-
-                paginatedResponse.Records = items;
-                paginatedResponse.TotalRecords = totalCount;
-                paginatedResponse.Footer = footer ?? new Dictionary<string, object>();
-
-                return paginatedResponse;
-            }, "Get Inventory");
+                return result.Success ? result.Data! : JsonResponseBuilder.BuildErrorJson(result.Message);
+            }
+            catch (PostgresException ex)
+            {
+                Logger.LogError(ex, "PostgreSQL error for OrgId: {OrgId}, TabType: {TabType}", orgId, request.TabType);
+                return JsonResponseBuilder.BuildErrorJson($"Database error: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Unexpected error for OrgId: {OrgId}, TabType: {TabType}", orgId, request.TabType);
+                return JsonResponseBuilder.BuildErrorJson($"Unexpected error: {ex.Message}");
+            }
         }
-        private long GetLongValue(NpgsqlDataReader reader, string columnName)
+        public async Task<string> GetInventorySalesJsonAsync(string orgId, InventoryQueryRequest request)
         {
-            var ordinal = reader.GetOrdinal(columnName);
-            return reader.IsDBNull(ordinal) ? 0 : reader.GetInt64(ordinal);
+            if (request.Page <= 0) return JsonResponseBuilder.BuildErrorJson("Page must be greater than 0.");
+            if (request.PageSize <= 0) return JsonResponseBuilder.BuildErrorJson("PageSize must be greater than 0.");
+            if (string.IsNullOrEmpty(request.TabType)) return JsonResponseBuilder.BuildErrorJson("TabType is required.");
+
+            try
+            {
+                var result = await ExecuteTenantOperation(orgId, async conn =>
+                {
+                    var sql = @"SELECT public.fn_amz_get_sales_inventory(
+                            @p_page, @p_page_size, @p_sort_field, @p_sort_order,
+                            @p_global_search, @p_tab_type, @p_filters);";
+
+                    await using var cmd = new NpgsqlCommand(sql, conn);
+                    cmd.Parameters.AddWithValue("@p_page", NpgsqlTypes.NpgsqlDbType.Integer, request.Page);
+                    cmd.Parameters.AddWithValue("@p_page_size", NpgsqlTypes.NpgsqlDbType.Integer, request.PageSize);
+                    cmd.Parameters.AddWithValue("@p_sort_field", NpgsqlTypes.NpgsqlDbType.Text, (object?)request.SortField ?? "asin");
+                    cmd.Parameters.AddWithValue("@p_sort_order", NpgsqlTypes.NpgsqlDbType.Integer, request.SortOrder);
+                    cmd.Parameters.AddWithValue("@p_global_search", NpgsqlTypes.NpgsqlDbType.Text, (object?)request.GlobalSearch ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@p_tab_type", NpgsqlTypes.NpgsqlDbType.Text, (object?)request.TabType ?? "product");
+                    var filtersJson = request.Filters != null && request.Filters.Any() ? System.Text.Json.JsonSerializer.Serialize(request.Filters) : "{}";
+                    cmd.Parameters.AddWithValue("@p_filters", NpgsqlTypes.NpgsqlDbType.Jsonb, filtersJson);
+
+                    var jsonResult = await cmd.ExecuteScalarAsync();
+                    if (jsonResult == null || jsonResult == DBNull.Value)
+                        return JsonResponseBuilder.BuildErrorJson("No data returned from fn_get_inventory.");
+
+                    return jsonResult.ToString() ?? JsonResponseBuilder.BuildErrorJson("Empty JSON response.");
+                }, $"Get Inventory - {request.TabType}");
+
+                return result.Success ? result.Data! : JsonResponseBuilder.BuildErrorJson(result.Message);
+            }
+            catch (PostgresException ex)
+            {
+                Logger.LogError(ex, "PostgreSQL error for OrgId: {OrgId}, TabType: {TabType}", orgId, request.TabType);
+                return JsonResponseBuilder.BuildErrorJson($"Database error: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Unexpected error for OrgId: {OrgId}, TabType: {TabType}", orgId, request.TabType);
+                return JsonResponseBuilder.BuildErrorJson($"Unexpected error: {ex.Message}");
+            }
         }
 
 

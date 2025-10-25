@@ -24,9 +24,18 @@ namespace xQuantum_API.Controllers.Reports
         [HttpPost("list")]
         public async Task<IActionResult> GetInventory([FromBody] InventoryQueryRequest req)
         {
-            var response = await _inventoryService.GetInventoryAsync(OrgId, req);
-            return response.Success ? Ok(response) : BadRequest(response);
+            var response = await _inventoryService.GetInventoryJsonAsync(OrgId, req);
+            return Content(response, "application/json");
+
         }
+        [HttpPost("forcast")]
+        public async Task<IActionResult> GetInventoryForcast([FromBody] InventoryQueryRequest req)
+        {
+            var response = await _inventoryService.GetInventorySalesJsonAsync(OrgId, req);
+            return Content(response, "application/json");
+
+        }
+
         [HttpPost("summary")]
         public async Task<IActionResult> GetInventoryCard([FromBody] InventoryCardSummaryRequest req)
         {
